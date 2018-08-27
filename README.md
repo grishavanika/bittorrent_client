@@ -1,7 +1,7 @@
 # Bencoding
 
-[![Build Status (Windows)](https://ci.appveyor.com/api/projects/status/5c1u1pjffcfe5i9x?svg=true)](https://ci.appveyor.com/project/grishavanika/cpp-initial-cmake)
-[![Build Status (Linux)](https://travis-ci.org/grishavanika/cpp_initial_cmake.svg)](https://travis-ci.org/grishavanika/cpp_initial_cmake)
+[![Build Status (Windows)](https://ci.appveyor.com/api/projects/status/54skmjik5tmfecpy?svg=true)](https://ci.appveyor.com/project/grishavanika/bencoding)
+[![Build Status (Linux)](https://travis-ci.org/grishavanika/bencoding.svg)](https://travis-ci.org/grishavanika/bencoding)
 
 # Supported compilers
 
@@ -48,9 +48,3 @@ Clang integration into MSVC 2017 is a bit broken (everything ok for MSVC 2015):
 - see this bug-report for more details: https://gitlab.kitware.com/cmake/cmake/issues/17930
 - see this LLVM report for tracking the status: https://bugs.llvm.org/show_bug.cgi?id=33672
 - see this GitHub project for possible fix: https://github.com/Farwaykorse/VS_Clang
-
-# Out-of-box support
-- Google Test
-- MSVC 2017 (see "Supported compilers" section)
-- AppVeyor integration
-- Travis CI integration
