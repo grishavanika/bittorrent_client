@@ -12,6 +12,13 @@ namespace be
 		BadStringLength,
 		StringOutOfBound,
 		NonStringAsDictionaryKey,
+		MissingListStart,
+		MissingListEnd,
+		MissingDictionaryStart,
+		MissingDictionaryEnd,
+		MissingIntegerStart,
+		MissingIntegerEnd,
+		MissingStringStart,
 	};
 
 	struct DecodeError

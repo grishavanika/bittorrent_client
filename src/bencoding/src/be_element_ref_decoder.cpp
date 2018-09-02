@@ -41,7 +41,7 @@ namespace be
 				}
 			}
 
-			bool has_data() const
+			[[nodiscard]] bool has_data() const
 			{
 				return (current_ < end_);
 			}
@@ -56,29 +56,43 @@ namespace be
 				return nonstd::make_unexpected(std::move(error));
 			}
 
-			void consume(char ch)
+			[[nodiscard]] bool consume(char ch)
 			{
-				assert(has_data());
-				assert(*current_ == ch);
-				(void)ch;
-				++current_;
+				if (has_data() && (*current_ == ch))
+				{
+					++current_;
+					return true;
+				}
+				return false;
 			}
 
-			void consume(std::size_t count)
+			[[nodiscard]] bool consume(std::size_t count)
 			{
-				assert((start_ + count) < end_);
-				current_ += count;
+				if ((start_ + count) < end_)
+				{
+					current_ += count;
+					return true;
+				}
+				return false;
 			}
 
 			DecodedBEElement decode_integer()
 			{
-				consume(k_integer_start);
-				return make_error(ElementId::String, DecodeErrorKind::Unknown);
+				if (!consume(k_integer_start))
+				{
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::MissingIntegerStart);
+				}
+				return make_error(ElementId::Integer, DecodeErrorKind::Unknown);
 			}
 
 			DecodedBEElement decode_list()
 			{
-				consume(k_list_start);
+				if (!consume(k_list_start))
+				{
+					return make_error(ElementId::String
+						, DecodeErrorKind::MissingListStart);
+				}
 				ListRefBuilder builder;
 				while (has_data() && (*current_ != k_element_end))
 				{
@@ -89,13 +103,21 @@ namespace be
 					}
 					builder.add(std::move(*element));
 				}
-				consume(k_element_end);
+				if (!consume(k_element_end))
+				{
+					return make_error(ElementId::String
+						, DecodeErrorKind::MissingListEnd);
+				}
 				return builder.build_once();
 			}
 
 			DecodedBEElement decode_dictionary()
 			{
-				consume(k_dictionary_start);
+				if (!consume(k_dictionary_start))
+				{
+					return make_error(ElementId::Dictionary
+						, DecodeErrorKind::MissingDictionaryStart);
+				}
 				DictionaryRefBuilder builder;
 				while (has_data() && (*current_ != k_element_end))
 				{
@@ -104,7 +126,7 @@ namespace be
 					{
 						return key;
 					}
-					if (key->element_id() != ElementId::String)
+					if (!key->is_string())
 					{
 						return make_error(ElementId::Dictionary
 							, DecodeErrorKind::NonStringAsDictionaryKey);
@@ -116,20 +138,23 @@ namespace be
 					}
 					builder.add(std::move(key->as_string()), std::move(*value));
 				}
-				consume(k_element_end);
+				if (!consume(k_element_end))
+				{
+					return make_error(ElementId::Dictionary
+						, DecodeErrorKind::MissingDictionaryEnd);
+				}
 				return builder.build_once();
 			}
 
 			DecodedBEElement decode_string()
 			{
-				assert(has_data());
 				auto length_element = decode_string_length();
 				if (!length_element)
 				{
 					return length_element;
 				}
 
-				const auto& length_str = length_element->as_number();
+				const auto& length_str = length_element->as_integer();
 				const char* length_end = length_str.data() + length_str.size();
 				std::size_t length = 0;
 				const auto result = std::from_chars(length_str.data()
@@ -140,13 +165,12 @@ namespace be
 						, DecodeErrorKind::BadStringLength);
 				}
 
-				if ((current_ + length) > end_)
+				const char* begin = current_;
+				if (!consume(length))
 				{
 					return make_error(ElementId::String
 						, DecodeErrorKind::StringOutOfBound);
 				}
-				const char* begin = current_;
-				consume(length);
 				return StringRefBuilder()
 					.set(nonstd::string_view(begin, length))
 					.build_once();
@@ -154,9 +178,8 @@ namespace be
 
 			DecodedBEElement decode_string_length()
 			{
-				assert(has_data());
 				const char* begin = current_;
-				do 
+				while (has_data())
 				{
 					if (std::isdigit(*current_))
 					{
@@ -173,19 +196,23 @@ namespace be
 							, DecodeErrorKind::UnexpectedStringLength);
 					}
 				}
-				while (has_data());
 
 				if (begin == current_)
 				{
-					// Missing number's digits: ":str"
+					// Missing number's digits: ":str" or empty string ""
 					return make_error(ElementId::String
 						, DecodeErrorKind::UnexpectedStringLength);
 				}
 
-				NumberRefBuilder builder;
-				builder.set(nonstd::string_view(begin, current_ - begin));
-				consume(k_string_start);
-				return builder.build_once();
+				if (!consume(k_string_start))
+				{
+					return make_error(ElementId::String
+						, DecodeErrorKind::MissingStringStart);
+				}
+
+				return NumberRefBuilder()
+					.set(nonstd::string_view(begin, current_ - begin - 1))
+					.build_once();
 			}
 
 		private:

@@ -16,7 +16,7 @@ namespace be
 	enum class ElementId
 	{
 		None,
-		Number,
+		Integer,
 		String,
 		List,
 		Dictionary,
@@ -25,11 +25,11 @@ namespace be
 	class BEElementRef
 	{
 	public:
-		using Number     = nonstd::string_view;
+		using Integer    = nonstd::string_view;
 		using String     = nonstd::string_view;
 		using List       = std::vector<BEElementRef>;
 		using Dictionary = std::vector<std::pair<String, BEElementRef>>;
-		using Storage    = nonstd::variant<Number, String, List, Dictionary>;
+		using Storage    = nonstd::variant<Integer, String, List, Dictionary>;
 
 	public:
 		explicit BEElementRef();
@@ -44,13 +44,17 @@ namespace be
 		const String& as_string() const;
 		String& as_string();
 
-		bool is_number() const;
-		const String& as_number() const;
-		String& as_number();
+		bool is_integer() const;
+		const String& as_integer() const;
+		String& as_integer();
 
 		bool is_list() const;
 		const List& as_list() const;
 		List& as_list();
+
+		bool is_dictionary() const;
+		const Dictionary& as_dictionary() const;
+		Dictionary& as_dictionary();
 
 	public:
 		friend bool operator==(const BEElementRef& lhs, const BEElementRef& rhs);
@@ -79,7 +83,7 @@ namespace be
 	{
 		switch (storage_.index())
 		{
-		case 0: return ElementId::Number;
+		case 0: return ElementId::Integer;
 		case 1: return ElementId::String;
 		case 2: return ElementId::List;
 		case 3: return ElementId::Dictionary;
@@ -104,21 +108,21 @@ namespace be
 			static_cast<const BEElementRef&>(*this).as_string());
 	}
 
-	inline bool BEElementRef::is_number() const
+	inline bool BEElementRef::is_integer() const
 	{
-		return (element_id() == ElementId::Number);
+		return (element_id() == ElementId::Integer);
 	}
 
-	inline const BEElementRef::String& BEElementRef::as_number() const
+	inline const BEElementRef::String& BEElementRef::as_integer() const
 	{
-		assert(is_number());
+		assert(is_integer());
 		return *nonstd::get_if<0>(&storage_);
 	}
 
-	inline BEElementRef::String& BEElementRef::as_number()
+	inline BEElementRef::String& BEElementRef::as_integer()
 	{
 		return const_cast<BEElementRef::String&>(
-			static_cast<const BEElementRef&>(*this).as_number());
+			static_cast<const BEElementRef&>(*this).as_integer());
 	}
 
 	inline bool BEElementRef::is_list() const
@@ -136,6 +140,23 @@ namespace be
 	{
 		return const_cast<BEElementRef::List&>(
 			static_cast<const BEElementRef&>(*this).as_list());
+	}
+
+	inline bool BEElementRef::is_dictionary() const
+	{
+		return (element_id() == ElementId::Dictionary);
+	}
+
+	inline const BEElementRef::Dictionary& BEElementRef::as_dictionary() const
+	{
+		assert(is_dictionary());
+		return *nonstd::get_if<3>(&storage_);
+	}
+
+	inline BEElementRef::Dictionary& BEElementRef::as_dictionary()
+	{
+		return const_cast<BEElementRef::Dictionary&>(
+			static_cast<const BEElementRef&>(*this).as_dictionary());
 	}
 
 	inline bool operator==(const BEElementRef& lhs, const BEElementRef& rhs)

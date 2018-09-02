@@ -16,7 +16,7 @@ namespace be
 		BEElementRef build_once()
 		{
 			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<2>(), std::move(std::move(list_))));
+				nonstd::in_place_index_t<2>(), std::move(list_)));
 		}
 
 	private:
@@ -37,7 +37,7 @@ namespace be
 		BEElementRef build_once()
 		{
 			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<3>(), std::move(std::move(dict_))));
+				nonstd::in_place_index_t<3>(), std::move(dict_)));
 		}
 
 	private:
@@ -56,7 +56,7 @@ namespace be
 		BEElementRef build_once()
 		{
 			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<0>(), std::move(std::move(number_))));
+				nonstd::in_place_index_t<0>(), std::move(number_)));
 		}
 
 	private:
@@ -75,7 +75,7 @@ namespace be
 		BEElementRef build_once()
 		{
 			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<1>(), std::move(std::move(str_))));
+				nonstd::in_place_index_t<1>(), std::move(str_)));
 		}
 
 	private:
