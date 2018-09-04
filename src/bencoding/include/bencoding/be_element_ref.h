@@ -64,6 +64,8 @@ namespace be
 		Storage storage_;
 	};
 
+	using BEElementsArrayRef = std::vector<BEElementRef>;
+
 	/*explicit*/ inline BEElementRef::BEElementRef()
 		: storage_()
 	{

@@ -9,6 +9,7 @@ namespace be
 		Unknown,
 		UnexpectedEnd,
 		UnexpectedStringLength,
+		BadInteger,
 		BadStringLength,
 		StringOutOfBound,
 		NonStringAsDictionaryKey,
@@ -28,10 +29,13 @@ namespace be
 		DecodeErrorKind kind = DecodeErrorKind::Unknown;
 	};
 
-	using Decoded = nonstd::expected<
-		std::vector<BEElementRef>,
-		DecodeError>;
+	template<typename T>
+	using Decoded = nonstd::expected<T, DecodeError>;
 
-	Decoded decode(nonstd::string_view bencoded);
+	Decoded<BEElementsArrayRef>       Decode(nonstd::string_view bencoded);
+	Decoded<BEElementRef::String>     DecodeString(nonstd::string_view bencoded);
+	Decoded<BEElementRef::Integer>    DecodeInteger(nonstd::string_view bencoded);
+	Decoded<BEElementRef::List>       DecodeList(nonstd::string_view bencoded);
+	Decoded<BEElementRef::Dictionary> DecodeDictionary(nonstd::string_view bencoded);
 
 } // namespace be

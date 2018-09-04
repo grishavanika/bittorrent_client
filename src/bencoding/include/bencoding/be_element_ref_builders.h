@@ -44,10 +44,10 @@ namespace be
 		BEElementRef::Dictionary dict_;
 	};
 
-	class NumberRefBuilder
+	class IntegerRefBuilder
 	{
 	public:
-		NumberRefBuilder& set(nonstd::string_view number)
+		IntegerRefBuilder& set(nonstd::string_view number)
 		{
 			number_ = std::move(number);
 			return *this;

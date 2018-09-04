@@ -41,41 +41,6 @@ namespace be
 				}
 			}
 
-			[[nodiscard]] bool has_data() const
-			{
-				return (current_ < end_);
-			}
-
-		private:
-			DecodedBEElement make_error(ElementId element, DecodeErrorKind kind) const
-			{
-				DecodeError error;
-				error.pos = (current_ - start_);
-				error.element = element;
-				error.kind = kind;
-				return nonstd::make_unexpected(std::move(error));
-			}
-
-			[[nodiscard]] bool consume(char ch)
-			{
-				if (has_data() && (*current_ == ch))
-				{
-					++current_;
-					return true;
-				}
-				return false;
-			}
-
-			[[nodiscard]] bool consume(std::size_t count)
-			{
-				if ((start_ + count) < end_)
-				{
-					current_ += count;
-					return true;
-				}
-				return false;
-			}
-
 			DecodedBEElement decode_integer()
 			{
 				if (!consume(k_integer_start))
@@ -83,7 +48,60 @@ namespace be
 					return make_error(ElementId::Integer
 						, DecodeErrorKind::MissingIntegerStart);
 				}
-				return make_error(ElementId::Integer, DecodeErrorKind::Unknown);
+				const char* const begin = current_;
+				const bool sign = (has_data() && (*begin == '-'));
+				if (sign)
+				{
+					++current_;
+				}
+
+				while (has_data() && (*current_ != k_element_end))
+				{
+					if (std::isdigit(*current_))
+					{
+						++current_;
+					}
+					else
+					{
+						return make_error(ElementId::Integer
+							, DecodeErrorKind::BadInteger);
+					}
+				}
+
+				const char* const last = current_;
+				if (!consume(k_element_end))
+				{
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::BadInteger);
+				}
+
+				if (begin == last)
+				{
+					// Missing number's digits: "ie"
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::BadInteger);
+				}
+				else if (sign && (last == (begin + 1)))
+				{
+					// Only `-` was specified: "i-e"
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::BadInteger);
+				}
+				else if (sign && *(begin + 1) == '0')
+				{
+					// "i-0e" case
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::BadInteger);
+				}
+				else if ((*begin == '0') && (last > (begin + 1)))
+				{
+					// "i03e" case
+					return make_error(ElementId::Integer
+						, DecodeErrorKind::BadInteger);
+				}
+				return IntegerRefBuilder()
+					.set(nonstd::string_view(begin, last - begin))
+					.build_once();
 			}
 
 			DecodedBEElement decode_list()
@@ -165,7 +183,7 @@ namespace be
 						, DecodeErrorKind::BadStringLength);
 				}
 
-				const char* begin = current_;
+				const char* const begin = current_;
 				if (!consume(length))
 				{
 					return make_error(ElementId::String
@@ -174,6 +192,41 @@ namespace be
 				return StringRefBuilder()
 					.set(nonstd::string_view(begin, length))
 					.build_once();
+			}
+
+			[[nodiscard]] bool has_data() const
+			{
+				return (current_ < end_);
+			}
+
+		private:
+			DecodedBEElement make_error(ElementId element, DecodeErrorKind kind) const
+			{
+				DecodeError error;
+				error.pos = (current_ - start_);
+				error.element = element;
+				error.kind = kind;
+				return nonstd::make_unexpected(std::move(error));
+			}
+
+			[[nodiscard]] bool consume(char ch)
+			{
+				if (has_data() && (*current_ == ch))
+				{
+					++current_;
+					return true;
+				}
+				return false;
+			}
+
+			[[nodiscard]] bool consume(std::size_t count)
+			{
+				if ((start_ + count) < end_)
+				{
+					current_ += count;
+					return true;
+				}
+				return false;
 			}
 
 			DecodedBEElement decode_string_length()
@@ -210,7 +263,7 @@ namespace be
 						, DecodeErrorKind::MissingStringStart);
 				}
 
-				return NumberRefBuilder()
+				return IntegerRefBuilder()
 					.set(nonstd::string_view(begin, current_ - begin - 1))
 					.build_once();
 			}
@@ -222,7 +275,7 @@ namespace be
 		};
 	} // namespace
 
-	Decoded decode(nonstd::string_view bencoded)
+	Decoded<std::vector<BEElementRef>> Decode(nonstd::string_view bencoded)
 	{
 		Decoder decoder(bencoded.data(), bencoded.size());
 
@@ -241,6 +294,51 @@ namespace be
 
 		return elements;
 	}
+
+	Decoded<BEElementRef::String> DecodeString(nonstd::string_view bencoded)
+	{
+		Decoder decoder(bencoded.data(), bencoded.size());
+		auto element = decoder.decode_string();
+		if (element)
+		{
+			return std::move(element->as_string());
+		}
+		return nonstd::make_unexpected(element.error());
+	}
+
+	Decoded<BEElementRef::Integer> DecodeInteger(nonstd::string_view bencoded)
+	{
+		Decoder decoder(bencoded.data(), bencoded.size());
+		auto element = decoder.decode_integer();
+		if (element)
+		{
+			return std::move(element->as_integer());
+		}
+		return nonstd::make_unexpected(element.error());
+	}
+
+	Decoded<BEElementRef::List> DecodeList(nonstd::string_view bencoded)
+	{
+		Decoder decoder(bencoded.data(), bencoded.size());
+		auto element = decoder.decode_list();
+		if (element)
+		{
+			return std::move(element->as_list());
+		}
+		return nonstd::make_unexpected(element.error());
+	}
+
+	Decoded<BEElementRef::Dictionary> DecodeDictionary(nonstd::string_view bencoded)
+	{
+		Decoder decoder(bencoded.data(), bencoded.size());
+		auto element = decoder.decode_dictionary();
+		if (element)
+		{
+			return std::move(element->as_dictionary());
+		}
+		return nonstd::make_unexpected(element.error());
+	}
+
 
 } // namespace be
 
