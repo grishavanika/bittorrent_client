@@ -1,7 +1,13 @@
 #include <bencoding/be_element_ref_builders.h>
 #include <bencoding/be_element_ref_decoder.h>
 
+#if __has_include(<charconv>)
 #include <charconv>
+#define BE_HAS_FROM_CHARS() 1
+#else
+#include <cstdlib>
+#define BE_HAS_FROM_CHARS() 0
+#endif
 
 #include <cassert>
 
@@ -14,6 +20,32 @@ namespace be
 		constexpr char k_dictionary_start = 'd';
 		constexpr char k_element_end = 'e';
 		constexpr char k_string_start = ':';
+
+		bool ParseLength(nonstd::string_view str, std::size_t& length)
+		{
+#if (BE_HAS_FROM_CHARS())
+			const char* begin = str.data();
+			const char* end = begin + str.size();
+			const auto result = std::from_chars(begin, end, length, 10);
+			if ((result.ptr != end) || (result.ec != std::errc()))
+			{
+				return false;
+			}
+			return true;
+#else
+			std::string temp(str.begin(), str.end());
+			const char* begin = temp.c_str();
+			const char* end = begin + temp.size();
+			char* parse_end = nullptr;
+			const long v = std::strtol(begin, &parse_end, 10);
+			if ((begin != end) && (parse_end == end))
+			{
+				length = static_cast<std::size_t>(v);
+				return true;
+			}
+			return false;
+#endif
+		}
 
 		using DecodedBEElement = nonstd::expected<BEElementRef, DecodeError>;
 
@@ -174,12 +206,8 @@ namespace be
 					return length_element;
 				}
 
-				const auto& length_str = length_element->as_integer();
-				const char* length_end = length_str.data() + length_str.size();
 				std::size_t length = 0;
-				const auto result =
-					std::from_chars(length_str.data(), length_end, length, 10);
-				if ((result.ptr != length_end) || (result.ec != std::errc()))
+				if (!ParseLength(length_element->as_integer(), length))
 				{
 					return make_error(
 						ElementId::String, DecodeErrorKind::BadStringLength);
@@ -202,8 +230,8 @@ namespace be
 			}
 
 		private:
-			DecodedBEElement make_error(
-				ElementId element, DecodeErrorKind kind) const
+			DecodedBEElement make_error(ElementId element,
+				DecodeErrorKind kind) const
 			{
 				DecodeError error;
 				error.pos = (current_ - start_);
