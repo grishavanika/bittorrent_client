@@ -294,7 +294,7 @@ namespace be
 			return nonstd::make_unexpected(std::move(element).error());
 		} while (decoder.has_data());
 
-		return elements;
+		return std::move(elements);
 	}
 
 	Decoded<BEElementRef::String> DecodeString(nonstd::string_view bencoded)
