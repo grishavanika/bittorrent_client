@@ -1,18 +1,17 @@
 #pragma once
-#include <vector>
+#include <nonstd/expected.hpp>
+#include <nonstd/string_view.hpp>
+#include <nonstd/variant.hpp>
+
 #include <map>
 #include <utility>
+#include <vector>
 
-#include <nonstd/variant.hpp>
-#include <nonstd/string_view.hpp>
-#include <nonstd/expected.hpp>
-
-#include <cctype>
 #include <cassert>
+#include <cctype>
 
 namespace be
 {
-
 	enum class ElementId
 	{
 		None,
@@ -25,11 +24,11 @@ namespace be
 	class BEElementRef
 	{
 	public:
-		using Integer    = nonstd::string_view;
-		using String     = nonstd::string_view;
-		using List       = std::vector<BEElementRef>;
+		using Integer = nonstd::string_view;
+		using String = nonstd::string_view;
+		using List = std::vector<BEElementRef>;
 		using Dictionary = std::vector<std::pair<String, BEElementRef>>;
-		using Storage    = nonstd::variant<Integer, String, List, Dictionary>;
+		using Storage = nonstd::variant<Integer, String, List, Dictionary>;
 
 	public:
 		explicit BEElementRef();
@@ -57,8 +56,10 @@ namespace be
 		Dictionary& as_dictionary();
 
 	public:
-		friend bool operator==(const BEElementRef& lhs, const BEElementRef& rhs);
-		friend bool operator!=(const BEElementRef& lhs, const BEElementRef& rhs);
+		friend bool operator==(
+			const BEElementRef& lhs, const BEElementRef& rhs);
+		friend bool operator!=(
+			const BEElementRef& lhs, const BEElementRef& rhs);
 
 	private:
 		Storage storage_;

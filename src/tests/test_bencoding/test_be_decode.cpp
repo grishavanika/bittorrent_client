@@ -1,7 +1,7 @@
-#include <gtest/gtest.h>
 #include <bencoding/be_element_ref.h>
-#include <bencoding/be_element_ref_decoder.h>
 #include <bencoding/be_element_ref_builders.h>
+#include <bencoding/be_element_ref_decoder.h>
+#include <gtest/gtest.h>
 
 using namespace be;
 
@@ -28,9 +28,11 @@ namespace
 	class StringsDictionaryRefBuilder
 	{
 	public:
-		StringsDictionaryRefBuilder& add(nonstd::string_view key, nonstd::string_view value)
+		StringsDictionaryRefBuilder& add(nonstd::string_view key,
+			nonstd::string_view value)
 		{
-			dict_.add(std::move(key), StringRefBuilder().set(value).build_once());
+			dict_.add(
+				std::move(key), StringRefBuilder().set(value).build_once());
 			return *this;
 		}
 
@@ -91,12 +93,10 @@ TEST(BEElementRefDecode, Missing_Colon_For_String_Fails)
 TEST(BEElementRefDecode, Strings_List)
 {
 	auto decoded = be::DecodeList("l4:spam4:eggse");
-	const auto expected = StringsListRefBuilder()
-		.add("spam")
-		.add("eggs")
-		.build_once();
+	const auto expected =
+		StringsListRefBuilder().add("spam").add("eggs").build_once();
 	ASSERT_TRUE(decoded);
-	
+
 	ASSERT_EQ(expected, *decoded);
 }
 
@@ -105,9 +105,9 @@ TEST(BEElementRefDecode, Strings_Dictionary)
 	auto decoded = be::DecodeDictionary("d3:cow3:moo4:spam4:eggse");
 	ASSERT_TRUE(decoded);
 	const auto expected = StringsDictionaryRefBuilder()
-		.add("cow", "moo")
-		.add("spam", "eggs")
-		.build_once();
+							  .add("cow", "moo")
+							  .add("spam", "eggs")
+							  .build_once();
 
 	ASSERT_EQ(expected, *decoded);
 }
@@ -116,19 +116,21 @@ TEST(BEElementRefDecode, Dictionary_With_List_Value)
 {
 	auto decoded = be::DecodeDictionary("d4:spaml1:a1:bee");
 	ASSERT_TRUE(decoded);
-	const auto expected = DictionaryRefBuilder()
-		.add("spam"
-			, ListRefBuilder()
-				.add(StringRefBuilder().set("a").build_once())
-				.add(StringRefBuilder().set("b").build_once())
-				.build_once())
-		.build_once()
-		.as_dictionary();
+	const auto expected =
+		DictionaryRefBuilder()
+			.add("spam",
+				ListRefBuilder()
+					.add(StringRefBuilder().set("a").build_once())
+					.add(StringRefBuilder().set("b").build_once())
+					.build_once())
+			.build_once()
+			.as_dictionary();
 
 	ASSERT_EQ(expected, *decoded);
 }
 
-TEST(BEElementRefDecode, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
+TEST(BEElementRefDecode,
+	Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
 {
 	{
 		auto decoded = be::DecodeInteger("i-0e");
@@ -175,8 +177,7 @@ TEST(BEElementRefDecode, Only_Negative_Integers_Parsed)
 
 	const char* k_integers[] = {"-3", "-123", "-1000000000"};
 
-	auto encode = [](const char* i)
-	{
+	auto encode = [](const char* i) {
 		return std::string("i") + i + std::string("e");
 	};
 
@@ -212,7 +213,13 @@ TEST(BEElementRefDecode, Integers_With_Leading_Zeroes_Invalid)
 
 TEST(BEElementRefDecode, Only_Digits_Expected_Between_Integer_Start_And_End)
 {
-	const char* k_encoded[] = {"i-e", "i-10xfe", "i1111", "1111e", "", };
+	const char* k_encoded[] = {
+		"i-e",
+		"i-10xfe",
+		"i1111",
+		"1111e",
+		"",
+	};
 	for (const char* integer : k_encoded)
 	{
 		auto decoded = be::DecodeInteger(integer);

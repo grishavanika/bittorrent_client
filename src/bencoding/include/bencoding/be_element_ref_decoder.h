@@ -3,7 +3,6 @@
 
 namespace be
 {
-
 	enum class DecodeErrorKind
 	{
 		Unknown,
@@ -32,10 +31,11 @@ namespace be
 	template<typename T>
 	using Decoded = nonstd::expected<T, DecodeError>;
 
-	Decoded<BEElementsArrayRef>       Decode(nonstd::string_view bencoded);
-	Decoded<BEElementRef::String>     DecodeString(nonstd::string_view bencoded);
-	Decoded<BEElementRef::Integer>    DecodeInteger(nonstd::string_view bencoded);
-	Decoded<BEElementRef::List>       DecodeList(nonstd::string_view bencoded);
-	Decoded<BEElementRef::Dictionary> DecodeDictionary(nonstd::string_view bencoded);
+	Decoded<BEElementsArrayRef> Decode(nonstd::string_view bencoded);
+	Decoded<BEElementRef::String> DecodeString(nonstd::string_view bencoded);
+	Decoded<BEElementRef::Integer> DecodeInteger(nonstd::string_view bencoded);
+	Decoded<BEElementRef::List> DecodeList(nonstd::string_view bencoded);
+	Decoded<BEElementRef::Dictionary> DecodeDictionary(
+		nonstd::string_view bencoded);
 
 } // namespace be

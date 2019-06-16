@@ -3,7 +3,6 @@
 
 namespace be
 {
-
 	class ListRefBuilder
 	{
 	public:
@@ -26,11 +25,12 @@ namespace be
 	class DictionaryRefBuilder
 	{
 	public:
-		DictionaryRefBuilder& add(BEElementRef::String&& key, BEElementRef&& value)
+		DictionaryRefBuilder& add(BEElementRef::String&& key,
+			BEElementRef&& value)
 		{
-			dict_.emplace_back(std::piecewise_construct
-				, std::make_tuple(std::move(key))
-				, std::make_tuple(std::move(value)));
+			dict_.emplace_back(std::piecewise_construct,
+				std::make_tuple(std::move(key)),
+				std::make_tuple(std::move(value)));
 			return *this;
 		}
 
@@ -83,4 +83,3 @@ namespace be
 	};
 
 } // namespace be
-
