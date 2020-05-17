@@ -31,7 +31,7 @@ namespace be
     template<typename T>
     using Decoded = nonstd::expected<T, DecodeError>;
 
-    Decoded<BEElementsArrayRef> Decode(std::string_view bencoded);
+    Decoded<ListRef> Decode(std::string_view bencoded);
     Decoded<StringRef> DecodeString(std::string_view bencoded);
     Decoded<IntegerRef> DecodeInteger(std::string_view bencoded);
     Decoded<ListRef> DecodeList(std::string_view bencoded);

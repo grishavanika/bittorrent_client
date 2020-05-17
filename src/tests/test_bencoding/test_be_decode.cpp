@@ -18,7 +18,7 @@ namespace
 
         ListRef build_once()
         {
-            return list_.build_once().as_list();
+            return std::move(*list_.build_once().as_list());
         }
 
     private:
@@ -37,7 +37,7 @@ namespace
 
         DictionaryRef build_once()
         {
-            return dict_.build_once().as_dictionary();
+            return std::move(*dict_.build_once().as_dictionary());
         }
 
     private:
@@ -45,7 +45,7 @@ namespace
     };
 } // namespace
 
-TEST(BEElementRefDecode, Empty_String_Is_UnexpectedEnd_Error)
+TEST(ElementRefDecode, Empty_String_Is_UnexpectedEnd_Error)
 {
     auto decoded = be::Decode("");
     ASSERT_FALSE(decoded);
@@ -55,21 +55,21 @@ TEST(BEElementRefDecode, Empty_String_Is_UnexpectedEnd_Error)
     ASSERT_EQ(error.kind, DecodeErrorKind::UnexpectedEnd);
 }
 
-TEST(BEElementRefDecode, ZeroString_IsValid)
+TEST(ElementRefDecode, ZeroString_IsValid)
 {
     auto decoded = be::DecodeString("0:");
     ASSERT_TRUE(decoded);
     ASSERT_EQ(std::string_view(), *decoded);
 }
 
-TEST(BEElementRefDecode, String_Is_NonNegative_Number_Sepatated_With_Colon)
+TEST(ElementRefDecode, String_Is_NonNegative_Number_Sepatated_With_Colon)
 {
     auto decoded = be::DecodeString("3:str");
     ASSERT_TRUE(decoded);
     ASSERT_EQ(std::string_view("str"), *decoded);
 }
 
-TEST(BEElementRefDecode, Too_Long_String_Fails_With_OutOfBound_Error)
+TEST(ElementRefDecode, Too_Long_String_Fails_With_OutOfBound_Error)
 {
     auto decoded = be::DecodeString("10:s");
     ASSERT_FALSE(decoded);
@@ -79,7 +79,7 @@ TEST(BEElementRefDecode, Too_Long_String_Fails_With_OutOfBound_Error)
     ASSERT_EQ(error.kind, DecodeErrorKind::StringOutOfBound);
 }
 
-TEST(BEElementRefDecode, Missing_Colon_For_String_Fails)
+TEST(ElementRefDecode, Missing_Colon_For_String_Fails)
 {
     auto decoded = be::Decode("10");
     ASSERT_FALSE(decoded);
@@ -89,7 +89,7 @@ TEST(BEElementRefDecode, Missing_Colon_For_String_Fails)
     ASSERT_EQ(error.kind, DecodeErrorKind::MissingStringStart);
 }
 
-TEST(BEElementRefDecode, Strings_List)
+TEST(ElementRefDecode, Strings_List)
 {
     auto decoded = be::DecodeList("l4:spam4:eggse");
     const auto expected = StringsListRefBuilder()
@@ -101,7 +101,7 @@ TEST(BEElementRefDecode, Strings_List)
     ASSERT_EQ(expected, *decoded);
 }
 
-TEST(BEElementRefDecode, Strings_Dictionary)
+TEST(ElementRefDecode, Strings_Dictionary)
 {
     auto decoded = be::DecodeDictionary("d3:cow3:moo4:spam4:eggse");
     ASSERT_TRUE(decoded);
@@ -113,24 +113,23 @@ TEST(BEElementRefDecode, Strings_Dictionary)
     ASSERT_EQ(expected, *decoded);
 }
 
-TEST(BEElementRefDecode, Dictionary_With_List_Value)
+TEST(ElementRefDecode, Dictionary_With_List_Value)
 {
     auto decoded = be::DecodeDictionary("d4:spaml1:a1:bee");
     ASSERT_TRUE(decoded);
     const auto expected =
-        DictionaryRefBuilder()
-            .add("spam",
-                ListRefBuilder()
-                    .add(StringRefBuilder().set("a").build_once())
-                    .add(StringRefBuilder().set("b").build_once())
-                    .build_once())
+        *DictionaryRefBuilder()
+            .add("spam", ListRefBuilder()
+                .add(StringRefBuilder().set("a").build_once())
+                .add(StringRefBuilder().set("b").build_once())
+                .build_once())
             .build_once()
             .as_dictionary();
 
     ASSERT_EQ(expected, *decoded);
 }
 
-TEST(BEElementRefDecode, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
+TEST(ElementRefDecode, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
 {
     {
         auto decoded = be::DecodeInteger("i-0e");
@@ -154,7 +153,7 @@ TEST(BEElementRefDecode, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Z
     }
 }
 
-TEST(BEElementRefDecode, Only_Single_Zero_Integers_Are_Parsed)
+TEST(ElementRefDecode, Only_Single_Zero_Integers_Are_Parsed)
 {
     {
         auto decoded = be::DecodeInteger("i0e");
@@ -170,7 +169,7 @@ TEST(BEElementRefDecode, Only_Single_Zero_Integers_Are_Parsed)
     }
 }
 
-TEST(BEElementRefDecode, Only_Negative_Integers_Parsed)
+TEST(ElementRefDecode, Only_Negative_Integers_Parsed)
 {
     auto bad = be::DecodeInteger("i-0e");
     ASSERT_FALSE(bad.has_value());
@@ -191,7 +190,7 @@ TEST(BEElementRefDecode, Only_Negative_Integers_Parsed)
     }
 }
 
-TEST(BEElementRefDecode, Integers_With_Leading_Zeroes_Invalid)
+TEST(ElementRefDecode, Integers_With_Leading_Zeroes_Invalid)
 {
     auto only_zero = be::DecodeInteger("i0e");
     ASSERT_TRUE(only_zero);
@@ -212,7 +211,7 @@ TEST(BEElementRefDecode, Integers_With_Leading_Zeroes_Invalid)
     }
 }
 
-TEST(BEElementRefDecode, Only_Digits_Expected_Between_Integer_Start_And_End)
+TEST(ElementRefDecode, Only_Digits_Expected_Between_Integer_Start_And_End)
 {
     const char* k_encoded[] =
     {

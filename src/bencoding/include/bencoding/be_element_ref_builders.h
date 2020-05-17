@@ -6,16 +6,16 @@ namespace be
     class ListRefBuilder
     {
     public:
-        ListRefBuilder& add(BEElementRef&& element)
+        ListRefBuilder& add(ElementRef&& element)
         {
             list_.push_back(std::move(element));
             return *this;
         }
 
-        BEElementRef build_once()
+        ElementRef build_once()
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::List)>();
-            return BEElementRef(StorageRef(tag, std::move(list_)));
+            return ElementRef(StorageRef(tag, std::move(list_)));
         }
 
     private:
@@ -26,7 +26,7 @@ namespace be
     {
     public:
         DictionaryRefBuilder& add(StringRef&& key,
-            BEElementRef&& value)
+            ElementRef&& value)
         {
             dict_.emplace_back(std::piecewise_construct,
                 std::make_tuple(std::move(key)),
@@ -34,10 +34,10 @@ namespace be
             return *this;
         }
 
-        BEElementRef build_once()
+        ElementRef build_once()
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::Dictionary)>();
-            return BEElementRef(StorageRef(tag, std::move(dict_)));
+            return ElementRef(StorageRef(tag, std::move(dict_)));
         }
 
     private:
@@ -53,10 +53,10 @@ namespace be
             return *this;
         }
 
-        BEElementRef build_once()
+        ElementRef build_once()
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::Integer)>();
-            return BEElementRef(StorageRef(tag, std::move(number_)));
+            return ElementRef(StorageRef(tag, std::move(number_)));
         }
 
     private:
@@ -72,10 +72,10 @@ namespace be
             return *this;
         }
 
-        BEElementRef build_once()
+        ElementRef build_once()
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::String)>();
-            return BEElementRef(StorageRef(tag, std::move(str_)));
+            return ElementRef(StorageRef(tag, std::move(str_)));
         }
 
     private:

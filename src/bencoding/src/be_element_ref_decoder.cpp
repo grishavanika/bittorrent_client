@@ -47,7 +47,7 @@ namespace be
 #endif
         }
 
-        using DecodedBEElement = nonstd::expected<BEElementRef, DecodeError>;
+        using DecodedElementRef = nonstd::expected<ElementRef, DecodeError>;
 
         struct Decoder
         {
@@ -58,7 +58,7 @@ namespace be
             {
             }
 
-            DecodedBEElement decode_element(
+            DecodedElementRef decode_element(
                 ElementId parent_id = ElementId::None)
             {
                 if (current_ >= end_)
@@ -74,7 +74,7 @@ namespace be
                 }
             }
 
-            DecodedBEElement decode_integer()
+            DecodedElementRef decode_integer()
             {
                 if (!consume(k_integer_start))
                 {
@@ -130,7 +130,7 @@ namespace be
                     .build_once();
             }
 
-            DecodedBEElement decode_list()
+            DecodedElementRef decode_list()
             {
                 if (!consume(k_list_start))
                 {
@@ -153,7 +153,7 @@ namespace be
                 return builder.build_once();
             }
 
-            DecodedBEElement decode_dictionary()
+            DecodedElementRef decode_dictionary()
             {
                 if (!consume(k_dictionary_start))
                 {
@@ -167,7 +167,7 @@ namespace be
                     {
                         return key;
                     }
-                    if (!key->is_string())
+                    if (!key->as_string())
                     {
                         return make_error(ElementId::Dictionary, DecodeErrorKind::NonStringAsDictionaryKey);
                     }
@@ -176,7 +176,7 @@ namespace be
                     {
                         return value;
                     }
-                    builder.add(std::move(key->as_string()), std::move(*value));
+                    builder.add(std::move(*key->as_string()), std::move(*value));
                 }
                 if (!consume(k_element_end))
                 {
@@ -185,16 +185,17 @@ namespace be
                 return builder.build_once();
             }
 
-            DecodedBEElement decode_string()
+            DecodedElementRef decode_string()
             {
                 auto length_element = decode_string_length();
                 if (!length_element)
                 {
                     return length_element;
                 }
+                assert(length_element->as_integer());
 
                 std::size_t length = 0;
-                if (!ParseLength(length_element->as_integer(), length))
+                if (!ParseLength(*length_element->as_integer(), length))
                 {
                     return make_error(ElementId::String, DecodeErrorKind::BadStringLength);
                 }
@@ -215,7 +216,7 @@ namespace be
             }
 
         private:
-            DecodedBEElement make_error(ElementId element, DecodeErrorKind kind) const
+            DecodedElementRef make_error(ElementId element, DecodeErrorKind kind) const
             {
                 DecodeError error;
                 error.pos = (current_ - start_);
@@ -244,7 +245,7 @@ namespace be
                 return false;
             }
 
-            DecodedBEElement decode_string_length()
+            DecodedElementRef decode_string_length()
             {
                 const char* begin = current_;
                 while (has_data())
@@ -287,11 +288,11 @@ namespace be
         };
     } // namespace
 
-    Decoded<std::vector<BEElementRef>> Decode(std::string_view bencoded)
+    Decoded<ListRef> Decode(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
 
-        std::vector<BEElementRef> elements;
+        ListRef elements;
         do
         {
             auto element = decoder.decode_element();
@@ -313,7 +314,8 @@ namespace be
         auto element = decoder.decode_string();
         if (element)
         {
-            return std::move(element->as_string());
+            assert(element->as_string());
+            return std::move(*element->as_string());
         }
         return nonstd::make_unexpected(element.error());
     }
@@ -324,7 +326,8 @@ namespace be
         auto element = decoder.decode_integer();
         if (element)
         {
-            return std::move(element->as_integer());
+            assert(element->as_integer());
+            return std::move(*element->as_integer());
         }
         return nonstd::make_unexpected(element.error());
     }
@@ -335,7 +338,8 @@ namespace be
         auto element = decoder.decode_list();
         if (element)
         {
-            return std::move(element->as_list());
+            assert(element->as_list());
+            return std::move(*element->as_list());
         }
         return nonstd::make_unexpected(element.error());
     }
@@ -346,7 +350,8 @@ namespace be
         auto element = decoder.decode_dictionary();
         if (element)
         {
-            return std::move(element->as_dictionary());
+            assert(element->as_dictionary());
+            return std::move(*element->as_dictionary());
         }
         return nonstd::make_unexpected(element.error());
     }
