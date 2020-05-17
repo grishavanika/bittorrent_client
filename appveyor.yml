@@ -1,11 +1,14 @@
 version: 1.0.{build}
-image: Visual Studio 2019 Preview
+image:
+  - Visual Studio 2019 Preview
+  - Ubuntu
 
 environment:
   matrix:
-    # - compiler: clang
-    - compiler: cl
-    # - compiler: gcc
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      cmake_generator: "Visual Studio 16 2019"
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+      cmake_generator: "Unix Makefiles"
 
 configuration:
   #- Debug
@@ -16,8 +19,13 @@ platform:
   - x64
 
 build_script:
-  - cmake -G "Visual Studio 16 2019" ..
-  - cmake --build . --config %configuration%
+  - mkdir build
+  - cd build
+  - cmd: cmake -G %cmake_generator% ..
+  - cmd: cmake --build . --config %configuration%
+  - sh: cmake -G $cmake_generator ..
+  - sh: cmake --build . --config $configuration
 
 test_script:
-  - ctest -C %configuration% --verbose
+  - cmd: ctest -C %configuration% --verbose
+  - cmd: ctest -C $configuration --verbose
