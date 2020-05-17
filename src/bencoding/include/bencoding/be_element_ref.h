@@ -44,13 +44,10 @@ namespace be
     class ElementRef
     {
     public:
-        explicit ElementRef();
         explicit ElementRef(StorageRef&& storage);
 
     public:
         ElementId element_id() const;
-
-        bool is_valid() const;
 
         const StringRef* as_string() const;
         StringRef* as_string();
@@ -72,19 +69,9 @@ namespace be
         StorageRef storage_;
     };
 
-    /*explicit*/ inline ElementRef::ElementRef()
-        : storage_()
-    {
-    }
-
     /*explicit*/ inline ElementRef::ElementRef(StorageRef&& storage)
         : storage_(std::move(storage))
     {
-    }
-
-    inline bool ElementRef::is_valid() const
-    {
-        return (element_id() != ElementId::None);
     }
 
     inline ElementId ElementRef::element_id() const
