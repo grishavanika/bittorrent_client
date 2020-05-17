@@ -63,8 +63,7 @@ namespace be
             {
                 if (current_ >= end_)
                 {
-                    return make_error(
-                        parent_id, DecodeErrorKind::UnexpectedEnd);
+                    return make_error(parent_id, DecodeErrorKind::UnexpectedEnd);
                 }
                 switch (*current_)
                 {
@@ -79,8 +78,7 @@ namespace be
             {
                 if (!consume(k_integer_start))
                 {
-                    return make_error(ElementId::Integer,
-                        DecodeErrorKind::MissingIntegerStart);
+                    return make_error(ElementId::Integer, DecodeErrorKind::MissingIntegerStart);
                 }
                 const char* const begin = current_;
                 const bool sign = (has_data() && (*begin == '-'));
@@ -97,41 +95,35 @@ namespace be
                     }
                     else
                     {
-                        return make_error(
-                            ElementId::Integer, DecodeErrorKind::BadInteger);
+                        return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                     }
                 }
 
                 const char* const last = current_;
                 if (!consume(k_element_end))
                 {
-                    return make_error(
-                        ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
 
                 if (begin == last)
                 {
                     // Missing number's digits: "ie"
-                    return make_error(
-                        ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 else if (sign && (last == (begin + 1)))
                 {
                     // Only `-` was specified: "i-e"
-                    return make_error(
-                        ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 else if (sign && *(begin + 1) == '0')
                 {
                     // "i-0e" case
-                    return make_error(
-                        ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 else if ((*begin == '0') && (last > (begin + 1)))
                 {
                     // "i03e" case
-                    return make_error(
-                        ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 return IntegerRefBuilder()
                     .set(std::string_view(begin, last - begin))
@@ -142,8 +134,7 @@ namespace be
             {
                 if (!consume(k_list_start))
                 {
-                    return make_error(
-                        ElementId::String, DecodeErrorKind::MissingListStart);
+                    return make_error(ElementId::String, DecodeErrorKind::MissingListStart);
                 }
                 ListRefBuilder builder;
                 while (has_data() && (*current_ != k_element_end))
@@ -157,8 +148,7 @@ namespace be
                 }
                 if (!consume(k_element_end))
                 {
-                    return make_error(
-                        ElementId::String, DecodeErrorKind::MissingListEnd);
+                    return make_error(ElementId::String, DecodeErrorKind::MissingListEnd);
                 }
                 return builder.build_once();
             }
@@ -167,8 +157,7 @@ namespace be
             {
                 if (!consume(k_dictionary_start))
                 {
-                    return make_error(ElementId::Dictionary,
-                        DecodeErrorKind::MissingDictionaryStart);
+                    return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryStart);
                 }
                 DictionaryRefBuilder builder;
                 while (has_data() && (*current_ != k_element_end))
@@ -180,8 +169,7 @@ namespace be
                     }
                     if (!key->is_string())
                     {
-                        return make_error(ElementId::Dictionary,
-                            DecodeErrorKind::NonStringAsDictionaryKey);
+                        return make_error(ElementId::Dictionary, DecodeErrorKind::NonStringAsDictionaryKey);
                     }
                     auto value = decode_element(ElementId::Dictionary);
                     if (!value)
@@ -192,8 +180,7 @@ namespace be
                 }
                 if (!consume(k_element_end))
                 {
-                    return make_error(ElementId::Dictionary,
-                        DecodeErrorKind::MissingDictionaryEnd);
+                    return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryEnd);
                 }
                 return builder.build_once();
             }
@@ -209,15 +196,13 @@ namespace be
                 std::size_t length = 0;
                 if (!ParseLength(length_element->as_integer(), length))
                 {
-                    return make_error(
-                        ElementId::String, DecodeErrorKind::BadStringLength);
+                    return make_error(ElementId::String, DecodeErrorKind::BadStringLength);
                 }
 
                 const char* const begin = current_;
                 if (!consume(length))
                 {
-                    return make_error(
-                        ElementId::String, DecodeErrorKind::StringOutOfBound);
+                    return make_error(ElementId::String, DecodeErrorKind::StringOutOfBound);
                 }
                 return StringRefBuilder()
                     .set(std::string_view(begin, length))
@@ -230,8 +215,7 @@ namespace be
             }
 
         private:
-            DecodedBEElement make_error(ElementId element,
-                DecodeErrorKind kind) const
+            DecodedBEElement make_error(ElementId element, DecodeErrorKind kind) const
             {
                 DecodeError error;
                 error.pos = (current_ - start_);
@@ -276,22 +260,19 @@ namespace be
                     }
                     else
                     {
-                        return make_error(ElementId::String,
-                            DecodeErrorKind::UnexpectedStringLength);
+                        return make_error(ElementId::String, DecodeErrorKind::UnexpectedStringLength);
                     }
                 }
 
                 if (begin == current_)
                 {
                     // Missing number's digits: ":str" or empty string ""
-                    return make_error(ElementId::String,
-                        DecodeErrorKind::UnexpectedStringLength);
+                    return make_error(ElementId::String, DecodeErrorKind::UnexpectedStringLength);
                 }
 
                 if (!consume(k_string_start))
                 {
-                    return make_error(
-                        ElementId::String, DecodeErrorKind::MissingStringStart);
+                    return make_error(ElementId::String, DecodeErrorKind::MissingStringStart);
                 }
 
                 return IntegerRefBuilder()
@@ -320,12 +301,13 @@ namespace be
                 continue;
             }
             return nonstd::make_unexpected(std::move(element).error());
-        } while (decoder.has_data());
+        }
+        while (decoder.has_data());
 
         return elements;
     }
 
-    Decoded<BEElementRef::String> DecodeString(std::string_view bencoded)
+    Decoded<StringRef> DecodeString(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
         auto element = decoder.decode_string();
@@ -336,7 +318,7 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<BEElementRef::Integer> DecodeInteger(std::string_view bencoded)
+    Decoded<IntegerRef> DecodeInteger(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
         auto element = decoder.decode_integer();
@@ -347,7 +329,7 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<BEElementRef::List> DecodeList(std::string_view bencoded)
+    Decoded<ListRef> DecodeList(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
         auto element = decoder.decode_list();
@@ -358,8 +340,7 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<BEElementRef::Dictionary> DecodeDictionary(
-        std::string_view bencoded)
+    Decoded<DictionaryRef> DecodeDictionary(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
         auto element = decoder.decode_dictionary();

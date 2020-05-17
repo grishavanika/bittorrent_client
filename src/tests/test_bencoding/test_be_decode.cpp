@@ -16,7 +16,7 @@ namespace
             return *this;
         }
 
-        BEElementRef::List build_once()
+        ListRef build_once()
         {
             return list_.build_once().as_list();
         }
@@ -31,12 +31,11 @@ namespace
         StringsDictionaryRefBuilder& add(std::string_view key,
             std::string_view value)
         {
-            dict_.add(
-                std::move(key), StringRefBuilder().set(value).build_once());
+            dict_.add(std::move(key), StringRefBuilder().set(value).build_once());
             return *this;
         }
 
-        BEElementRef::Dictionary build_once()
+        DictionaryRef build_once()
         {
             return dict_.build_once().as_dictionary();
         }
@@ -93,8 +92,10 @@ TEST(BEElementRefDecode, Missing_Colon_For_String_Fails)
 TEST(BEElementRefDecode, Strings_List)
 {
     auto decoded = be::DecodeList("l4:spam4:eggse");
-    const auto expected =
-        StringsListRefBuilder().add("spam").add("eggs").build_once();
+    const auto expected = StringsListRefBuilder()
+        .add("spam")
+        .add("eggs")
+        .build_once();
     ASSERT_TRUE(decoded);
 
     ASSERT_EQ(expected, *decoded);
@@ -105,9 +106,9 @@ TEST(BEElementRefDecode, Strings_Dictionary)
     auto decoded = be::DecodeDictionary("d3:cow3:moo4:spam4:eggse");
     ASSERT_TRUE(decoded);
     const auto expected = StringsDictionaryRefBuilder()
-                              .add("cow", "moo")
-                              .add("spam", "eggs")
-                              .build_once();
+        .add("cow", "moo")
+        .add("spam", "eggs")
+        .build_once();
 
     ASSERT_EQ(expected, *decoded);
 }
@@ -129,8 +130,7 @@ TEST(BEElementRefDecode, Dictionary_With_List_Value)
     ASSERT_EQ(expected, *decoded);
 }
 
-TEST(BEElementRefDecode,
-    Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
+TEST(BEElementRefDecode, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
 {
     {
         auto decoded = be::DecodeInteger("i-0e");
@@ -177,7 +177,8 @@ TEST(BEElementRefDecode, Only_Negative_Integers_Parsed)
 
     const char* k_integers[] = {"-3", "-123", "-1000000000"};
 
-    auto encode = [](const char* i) {
+    auto encode = [](const char* i)
+    {
         return std::string("i") + i + std::string("e");
     };
 
@@ -213,7 +214,8 @@ TEST(BEElementRefDecode, Integers_With_Leading_Zeroes_Invalid)
 
 TEST(BEElementRefDecode, Only_Digits_Expected_Between_Integer_Start_And_End)
 {
-    const char* k_encoded[] = {
+    const char* k_encoded[] =
+    {
         "i-e",
         "i-10xfe",
         "i1111",

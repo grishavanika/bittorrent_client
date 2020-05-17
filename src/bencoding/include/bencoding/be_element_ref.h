@@ -21,18 +21,32 @@ namespace be
         Dictionary,
     };
 
+    class BEElementRef;
+    using BEElementsArrayRef = std::vector<BEElementRef>;
+    using IntegerRef         = std::string_view;
+    using StringRef          = std::string_view;
+    using ListRef            = std::vector<BEElementRef>;
+    using DictionaryRef      = std::vector<std::pair<StringRef, BEElementRef>>;
+    using StorageRef         = std::variant<IntegerRef, StringRef, ListRef, DictionaryRef>;
+
+    // Index of ElementId in `StorageRef` variant.
+    constexpr std::size_t ElementIdToIndex(ElementId id)
+    {
+        switch (id)
+        {
+        case ElementId::Integer:    return 0u;
+        case ElementId::String:     return 1u;
+        case ElementId::List:       return 2u;
+        case ElementId::Dictionary: return 3u;
+        }
+        return std::size_t(-1);
+    }
+
     class BEElementRef
     {
     public:
-        using Integer = std::string_view;
-        using String = std::string_view;
-        using List = std::vector<BEElementRef>;
-        using Dictionary = std::vector<std::pair<String, BEElementRef>>;
-        using Storage = std::variant<Integer, String, List, Dictionary>;
-
-    public:
         explicit BEElementRef();
-        explicit BEElementRef(Storage&& storage);
+        explicit BEElementRef(StorageRef&& storage);
 
     public:
         ElementId element_id() const;
@@ -40,39 +54,35 @@ namespace be
         bool is_valid() const;
 
         bool is_string() const;
-        const String& as_string() const;
-        String& as_string();
+        const StringRef& as_string() const;
+        StringRef& as_string();
 
         bool is_integer() const;
-        const String& as_integer() const;
-        String& as_integer();
+        const IntegerRef& as_integer() const;
+        IntegerRef& as_integer();
 
         bool is_list() const;
-        const List& as_list() const;
-        List& as_list();
+        const ListRef& as_list() const;
+        ListRef& as_list();
 
         bool is_dictionary() const;
-        const Dictionary& as_dictionary() const;
-        Dictionary& as_dictionary();
+        const DictionaryRef& as_dictionary() const;
+        DictionaryRef& as_dictionary();
 
     public:
-        friend bool operator==(
-            const BEElementRef& lhs, const BEElementRef& rhs);
-        friend bool operator!=(
-            const BEElementRef& lhs, const BEElementRef& rhs);
+        friend bool operator==(const BEElementRef& lhs, const BEElementRef& rhs);
+        friend bool operator!=(const BEElementRef& lhs, const BEElementRef& rhs);
 
     private:
-        Storage storage_;
+        StorageRef storage_;
     };
-
-    using BEElementsArrayRef = std::vector<BEElementRef>;
 
     /*explicit*/ inline BEElementRef::BEElementRef()
         : storage_()
     {
     }
 
-    /*explicit*/ inline BEElementRef::BEElementRef(Storage&& storage)
+    /*explicit*/ inline BEElementRef::BEElementRef(StorageRef&& storage)
         : storage_(std::move(storage))
     {
     }
@@ -86,10 +96,10 @@ namespace be
     {
         switch (storage_.index())
         {
-        case 0: return ElementId::Integer;
-        case 1: return ElementId::String;
-        case 2: return ElementId::List;
-        case 3: return ElementId::Dictionary;
+        case ElementIdToIndex(ElementId::Integer):    return ElementId::Integer;
+        case ElementIdToIndex(ElementId::String):     return ElementId::String;
+        case ElementIdToIndex(ElementId::List):       return ElementId::List;
+        case ElementIdToIndex(ElementId::Dictionary): return ElementId::Dictionary;
         }
         return ElementId::None;
     }
@@ -99,16 +109,15 @@ namespace be
         return (element_id() == ElementId::String);
     }
 
-    inline const BEElementRef::String& BEElementRef::as_string() const
+    inline const StringRef& BEElementRef::as_string() const
     {
         assert(is_string());
-        return *std::get_if<1>(&storage_);
+        return *std::get_if<ElementIdToIndex(ElementId::String)>(&storage_);
     }
 
-    inline BEElementRef::String& BEElementRef::as_string()
+    inline StringRef& BEElementRef::as_string()
     {
-        return const_cast<BEElementRef::String&>(
-            static_cast<const BEElementRef&>(*this).as_string());
+        return const_cast<StringRef&>(static_cast<const BEElementRef&>(*this).as_string());
     }
 
     inline bool BEElementRef::is_integer() const
@@ -116,16 +125,15 @@ namespace be
         return (element_id() == ElementId::Integer);
     }
 
-    inline const BEElementRef::String& BEElementRef::as_integer() const
+    inline const IntegerRef& BEElementRef::as_integer() const
     {
         assert(is_integer());
-        return *std::get_if<0>(&storage_);
+        return *std::get_if<ElementIdToIndex(ElementId::Integer)>(&storage_);
     }
 
-    inline BEElementRef::String& BEElementRef::as_integer()
+    inline IntegerRef& BEElementRef::as_integer()
     {
-        return const_cast<BEElementRef::String&>(
-            static_cast<const BEElementRef&>(*this).as_integer());
+        return const_cast<IntegerRef&>(static_cast<const BEElementRef&>(*this).as_integer());
     }
 
     inline bool BEElementRef::is_list() const
@@ -133,16 +141,15 @@ namespace be
         return (element_id() == ElementId::List);
     }
 
-    inline const BEElementRef::List& BEElementRef::as_list() const
+    inline const ListRef& BEElementRef::as_list() const
     {
         assert(is_list());
-        return *std::get_if<2>(&storage_);
+        return *std::get_if<ElementIdToIndex(ElementId::List)>(&storage_);
     }
 
-    inline BEElementRef::List& BEElementRef::as_list()
+    inline ListRef& BEElementRef::as_list()
     {
-        return const_cast<BEElementRef::List&>(
-            static_cast<const BEElementRef&>(*this).as_list());
+        return const_cast<ListRef&>(static_cast<const BEElementRef&>(*this).as_list());
     }
 
     inline bool BEElementRef::is_dictionary() const
@@ -150,16 +157,15 @@ namespace be
         return (element_id() == ElementId::Dictionary);
     }
 
-    inline const BEElementRef::Dictionary& BEElementRef::as_dictionary() const
+    inline const DictionaryRef& BEElementRef::as_dictionary() const
     {
         assert(is_dictionary());
-        return *std::get_if<3>(&storage_);
+        return *std::get_if<ElementIdToIndex(ElementId::Dictionary)>(&storage_);
     }
 
-    inline BEElementRef::Dictionary& BEElementRef::as_dictionary()
+    inline DictionaryRef& BEElementRef::as_dictionary()
     {
-        return const_cast<BEElementRef::Dictionary&>(
-            static_cast<const BEElementRef&>(*this).as_dictionary());
+        return const_cast<DictionaryRef&>(static_cast<const BEElementRef&>(*this).as_dictionary());
     }
 
     inline bool operator==(const BEElementRef& lhs, const BEElementRef& rhs)

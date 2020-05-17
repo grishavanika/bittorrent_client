@@ -32,10 +32,9 @@ namespace be
     using Decoded = nonstd::expected<T, DecodeError>;
 
     Decoded<BEElementsArrayRef> Decode(std::string_view bencoded);
-    Decoded<BEElementRef::String> DecodeString(std::string_view bencoded);
-    Decoded<BEElementRef::Integer> DecodeInteger(std::string_view bencoded);
-    Decoded<BEElementRef::List> DecodeList(std::string_view bencoded);
-    Decoded<BEElementRef::Dictionary> DecodeDictionary(
-        std::string_view bencoded);
+    Decoded<StringRef> DecodeString(std::string_view bencoded);
+    Decoded<IntegerRef> DecodeInteger(std::string_view bencoded);
+    Decoded<ListRef> DecodeList(std::string_view bencoded);
+    Decoded<DictionaryRef> DecodeDictionary(std::string_view bencoded);
 
 } // namespace be

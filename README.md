@@ -1,7 +1,6 @@
 # Bencoding
 
-[![Build Status (Windows)](https://ci.appveyor.com/api/projects/status/54skmjik5tmfecpy?svg=true)](https://ci.appveyor.com/project/grishavanika/bencoding)
-[![Build Status (Linux)](https://travis-ci.org/grishavanika/bencoding.svg)](https://travis-ci.org/grishavanika/bencoding)
+[![Build Status](https://ci.appveyor.com/api/projects/status/54skmjik5tmfecpy?svg=true)](https://ci.appveyor.com/project/grishavanika/bencoding)
 
 ### LLVM on Windows
 
