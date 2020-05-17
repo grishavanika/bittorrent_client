@@ -2,11 +2,11 @@
 #include <bencoding/be_element_ref_decoder.h>
 
 #if __has_include(<charconv>)
-#include <charconv>
-#define BE_HAS_FROM_CHARS() 1
+#  include <charconv>
+#  define BE_HAS_FROM_CHARS() 1
 #else
-#include <cstdlib>
-#define BE_HAS_FROM_CHARS() 0
+#  include <cstdlib>
+#  define BE_HAS_FROM_CHARS() 0
 #endif
 
 #include <cassert>
@@ -33,11 +33,25 @@ namespace be
             }
             return true;
 #else
-            std::string temp(str.begin(), str.end());
-            const char* begin = temp.c_str();
-            const char* end = begin + temp.size();
+            // https://stackoverflow.com/questions/43787672/the-max-number-of-digits-in-an-int-based-on-number-of-bits
+            static_assert(CHAR_BIT == 8, "Max decimal digits formula assumes byte is 8 bits");
+            constexpr std::size_t k_buf_size = (241 * sizeof(length) / 100 + 1) + 1; // +1 for '\0'.
+            const std::size_t size = str.size();
+            if ((size == 0) || (size >= k_buf_size))
+            {
+                return false;
+            }
+            char temp[k_buf_size];
+#if defined(_MSC_VER)
+            (void)strncpy_s(temp, str.data(), size);
+#else
+            (void)strncpy(temp, str.data(), size);
+#endif
+            temp[size] = '\0';
+            const char* begin = temp;
+            const char* end = begin + size;
             char* parse_end = nullptr;
-            const long v = std::strtol(begin, &parse_end, 10);
+            const unsigned long long v = std::strtoull(begin, &parse_end, 10);
             if ((begin != end) && (parse_end == end))
             {
                 length = static_cast<std::size_t>(v);
