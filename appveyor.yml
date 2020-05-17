@@ -3,29 +3,15 @@ image:
   - Visual Studio 2019 Preview
   - Ubuntu
 
-environment:
-  matrix:
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      cmake_generator: "Visual Studio 16 2019"
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
-      cmake_generator: "Unix Makefiles"
-
-configuration:
-  #- Debug
-  - Release
-
-platform:
-  #- x86
-  - x64
+install:
+  - git submodule update --init --recursive
 
 build_script:
   - mkdir build
   - cd build
-  - cmd: cmake -G %cmake_generator% ..
-  - cmd: cmake --build . --config %configuration%
-  - sh: cmake -G $cmake_generator ..
-  - sh: cmake --build . --config $configuration
+  - cmd: cmake -G "Visual Studio 16 2019" ..
+  - sh: cmake -DCMAKE_BUILD_TYPE=Release ..
+  - cmake --build . --config Release
 
 test_script:
-  - cmd: ctest -C %configuration% --verbose
-  - cmd: ctest -C $configuration --verbose
+  - ctest -C Release --verbose
