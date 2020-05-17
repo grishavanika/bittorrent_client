@@ -17,11 +17,10 @@ for:
     - cmake -DCMAKE_BUILD_TYPE=Release ..
     - cmake --build . --config Release
 
-for:
 -
   matrix:
     only:
-      - image: Ubuntu
+      - image: Visual Studio 2019 Preview
 
   build_script:
     - mkdir build & cd build
