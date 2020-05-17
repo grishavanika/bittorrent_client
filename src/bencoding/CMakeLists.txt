@@ -9,6 +9,4 @@ set_all_warnings(${lib_name} PUBLIC)
 target_include_directories(${lib_name} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(${lib_name} PUBLIC include)
 
-target_link_libraries(${lib_name} PUBLIC string-view-lite)
-target_link_libraries(${lib_name} PUBLIC variant-lite)
 target_link_libraries(${lib_name} PUBLIC expected-lite)

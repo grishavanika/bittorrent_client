@@ -19,7 +19,7 @@ detect_compilers()
 set_cpp17_standard()
 
 if (clang_on_msvc)
-	make_clang_work_on_windows()
+    make_clang_work_on_windows()
 endif()
 
 add_subdirectory(third_party)

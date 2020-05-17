@@ -3,83 +3,83 @@
 
 namespace be
 {
-	class ListRefBuilder
-	{
-	public:
-		ListRefBuilder& add(BEElementRef&& element)
-		{
-			list_.push_back(std::move(element));
-			return *this;
-		}
+    class ListRefBuilder
+    {
+    public:
+        ListRefBuilder& add(BEElementRef&& element)
+        {
+            list_.push_back(std::move(element));
+            return *this;
+        }
 
-		BEElementRef build_once()
-		{
-			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<2>(), std::move(list_)));
-		}
+        BEElementRef build_once()
+        {
+            return BEElementRef(BEElementRef::Storage(
+                std::in_place_index_t<2>(), std::move(list_)));
+        }
 
-	private:
-		BEElementRef::List list_;
-	};
+    private:
+        BEElementRef::List list_;
+    };
 
-	class DictionaryRefBuilder
-	{
-	public:
-		DictionaryRefBuilder& add(BEElementRef::String&& key,
-			BEElementRef&& value)
-		{
-			dict_.emplace_back(std::piecewise_construct,
-				std::make_tuple(std::move(key)),
-				std::make_tuple(std::move(value)));
-			return *this;
-		}
+    class DictionaryRefBuilder
+    {
+    public:
+        DictionaryRefBuilder& add(BEElementRef::String&& key,
+            BEElementRef&& value)
+        {
+            dict_.emplace_back(std::piecewise_construct,
+                std::make_tuple(std::move(key)),
+                std::make_tuple(std::move(value)));
+            return *this;
+        }
 
-		BEElementRef build_once()
-		{
-			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<3>(), std::move(dict_)));
-		}
+        BEElementRef build_once()
+        {
+            return BEElementRef(BEElementRef::Storage(
+                std::in_place_index_t<3>(), std::move(dict_)));
+        }
 
-	private:
-		BEElementRef::Dictionary dict_;
-	};
+    private:
+        BEElementRef::Dictionary dict_;
+    };
 
-	class IntegerRefBuilder
-	{
-	public:
-		IntegerRefBuilder& set(nonstd::string_view number)
-		{
-			number_ = std::move(number);
-			return *this;
-		}
+    class IntegerRefBuilder
+    {
+    public:
+        IntegerRefBuilder& set(std::string_view number)
+        {
+            number_ = std::move(number);
+            return *this;
+        }
 
-		BEElementRef build_once()
-		{
-			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<0>(), std::move(number_)));
-		}
+        BEElementRef build_once()
+        {
+            return BEElementRef(BEElementRef::Storage(
+                std::in_place_index_t<0>(), std::move(number_)));
+        }
 
-	private:
-		nonstd::string_view number_;
-	};
+    private:
+        std::string_view number_;
+    };
 
-	class StringRefBuilder
-	{
-	public:
-		StringRefBuilder& set(nonstd::string_view str)
-		{
-			str_ = std::move(str);
-			return *this;
-		}
+    class StringRefBuilder
+    {
+    public:
+        StringRefBuilder& set(std::string_view str)
+        {
+            str_ = std::move(str);
+            return *this;
+        }
 
-		BEElementRef build_once()
-		{
-			return BEElementRef(BEElementRef::Storage(
-				nonstd::in_place_index_t<1>(), std::move(str_)));
-		}
+        BEElementRef build_once()
+        {
+            return BEElementRef(BEElementRef::Storage(
+                std::in_place_index_t<1>(), std::move(str_)));
+        }
 
-	private:
-		nonstd::string_view str_;
-	};
+    private:
+        std::string_view str_;
+    };
 
 } // namespace be
