@@ -37,6 +37,7 @@ namespace be
         case ElementId::String:     return 1u;
         case ElementId::List:       return 2u;
         case ElementId::Dictionary: return 3u;
+        case ElementId::None:       return std::size_t(-1);
         }
         return std::size_t(-1);
     }

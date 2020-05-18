@@ -10,3 +10,8 @@ if (NOT expected_lite_POPULATED)
 endif ()
 
 add_subdirectory(${expected_lite_SOURCE_DIR} ${expected_lite_BINARY_DIR} EXCLUDE_FROM_ALL)
+
+if (clang_on_msvc)
+	target_compile_options(expected-lite INTERFACE
+		-Wno-missing-noreturn)
+endif ()

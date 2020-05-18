@@ -319,7 +319,14 @@ namespace be
         }
         while (decoder.has_data());
 
+#if defined(__clang__)
+        // error : prior to the resolution of a defect report against ISO C++11,
+        // local variable 'elements' would have been copied despite being
+        // returned by name, due to its not matching the function return type
+        return std::move(elements);
+#else
         return elements;
+#endif
     }
 
     Decoded<StringRef> DecodeString(std::string_view bencoded)
