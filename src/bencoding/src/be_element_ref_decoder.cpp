@@ -34,14 +34,16 @@ namespace be
             return true;
 #else
             // https://stackoverflow.com/questions/43787672/the-max-number-of-digits-in-an-int-based-on-number-of-bits
-            static_assert(CHAR_BIT == 8, "Max decimal digits formula assumes byte is 8 bits");
-            constexpr std::size_t k_buf_size = (241 * sizeof(length) / 100 + 1) + 1; // +1 for '\0'.
+            static_assert(CHAR_BIT == 8
+                , "Max decimal digits formula assumes byte is 8 bits");
+            constexpr std::size_t k_buf_size = (241 * sizeof(length) / 100 + 1);
+
             const std::size_t size = str.size();
             if ((size == 0) || (size >= k_buf_size))
             {
                 return false;
             }
-            char temp[k_buf_size];
+            char temp[k_buf_size + 1];
 #if defined(_MSC_VER)
             (void)strncpy_s(temp, str.data(), size);
 #else
@@ -72,8 +74,7 @@ namespace be
             {
             }
 
-            DecodedElementRef decode_element(
-                ElementId parent_id = ElementId::None)
+            DecodedElementRef decode_element(ElementId parent_id = ElementId::None)
             {
                 if (current_ >= end_)
                 {
@@ -81,10 +82,10 @@ namespace be
                 }
                 switch (*current_)
                 {
-                case k_integer_start: return decode_integer();
-                case k_list_start: return decode_list();
-                case k_dictionary_start: return decode_dictionary();
-                default: return decode_string();
+                case k_integer_start    : return decode_integer();
+                case k_list_start       : return decode_list();
+                case k_dictionary_start : return decode_dictionary();
+                default                 : return decode_string();
                 }
             }
 
@@ -95,8 +96,8 @@ namespace be
                     return make_error(ElementId::Integer, DecodeErrorKind::MissingIntegerStart);
                 }
                 const char* const begin = current_;
-                const bool sign = (has_data() && (*begin == '-'));
-                if (sign)
+                const bool has_sign = (has_data() && (*begin == '-'));
+                if (has_sign)
                 {
                     ++current_;
                 }
@@ -121,22 +122,22 @@ namespace be
 
                 if (begin == last)
                 {
-                    // Missing number's digits: "ie"
+                    // Missing number's digits: "ie".
                     return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
-                else if (sign && (last == (begin + 1)))
+                else if (has_sign && (last == (begin + 1)))
                 {
-                    // Only `-` was specified: "i-e"
+                    // Only `-` was specified: "i-e".
                     return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
-                else if (sign && *(begin + 1) == '0')
+                else if (has_sign && *(begin + 1) == '0')
                 {
-                    // "i-0e" case
+                    // "i-0e" case.
                     return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 else if ((*begin == '0') && (last > (begin + 1)))
                 {
-                    // "i03e" case
+                    // "i03e" case.
                     return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
                 }
                 return IntegerRefBuilder()
@@ -215,7 +216,7 @@ namespace be
                 }
 
                 const char* const begin = current_;
-                if (!consume(length))
+                if (!consume_n(length))
                 {
                     return make_error(ElementId::String, DecodeErrorKind::StringOutOfBound);
                 }
@@ -233,7 +234,7 @@ namespace be
             DecodedElementRef make_error(ElementId element, DecodeErrorKind kind) const
             {
                 DecodeError error;
-                error.pos = (current_ - start_);
+                error.position = (current_ - start_);
                 error.element = element;
                 error.kind = kind;
                 return nonstd::make_unexpected(std::move(error));
@@ -249,7 +250,7 @@ namespace be
                 return false;
             }
 
-            [[nodiscard]] bool consume(std::size_t count)
+            [[nodiscard]] bool consume_n(std::size_t count)
             {
                 if ((start_ + count) < end_)
                 {
@@ -281,7 +282,7 @@ namespace be
 
                 if (begin == current_)
                 {
-                    // Missing number's digits: ":str" or empty string ""
+                    // Missing number's digits: ":str" or empty string "".
                     return make_error(ElementId::String, DecodeErrorKind::UnexpectedStringLength);
                 }
 
@@ -319,14 +320,7 @@ namespace be
         }
         while (decoder.has_data());
 
-#if defined(__clang__)
-        // error : prior to the resolution of a defect report against ISO C++11,
-        // local variable 'elements' would have been copied despite being
-        // returned by name, due to its not matching the function return type
-        return std::move(elements);
-#else
-        return elements;
-#endif
+        return Decoded<ListRef>(std::move(elements));
     }
 
     Decoded<StringRef> DecodeString(std::string_view bencoded)

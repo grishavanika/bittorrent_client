@@ -23,7 +23,7 @@ namespace be
 
     struct DecodeError
     {
-        std::size_t pos = 0u;
+        std::size_t position = 0u;
         ElementId element = ElementId::None;
         DecodeErrorKind kind = DecodeErrorKind::Unknown;
     };
@@ -31,10 +31,10 @@ namespace be
     template<typename T>
     using Decoded = nonstd::expected<T, DecodeError>;
 
-    Decoded<ListRef> Decode(std::string_view bencoded);
-    Decoded<StringRef> DecodeString(std::string_view bencoded);
-    Decoded<IntegerRef> DecodeInteger(std::string_view bencoded);
-    Decoded<ListRef> DecodeList(std::string_view bencoded);
+    Decoded<ListRef>       Decode(std::string_view bencoded);
+    Decoded<StringRef>     DecodeString(std::string_view bencoded);
+    Decoded<IntegerRef>    DecodeInteger(std::string_view bencoded);
+    Decoded<ListRef>       DecodeList(std::string_view bencoded);
     Decoded<DictionaryRef> DecodeDictionary(std::string_view bencoded);
 
 } // namespace be

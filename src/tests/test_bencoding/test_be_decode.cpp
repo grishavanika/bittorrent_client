@@ -50,7 +50,7 @@ TEST(ElementRefDecode, Empty_String_Is_UnexpectedEnd_Error)
     auto decoded = be::Decode("");
     ASSERT_FALSE(decoded);
     const DecodeError& error = decoded.error();
-    ASSERT_EQ(0u, error.pos);
+    ASSERT_EQ(0u, error.position);
     ASSERT_EQ(ElementId::None, error.element);
     ASSERT_EQ(error.kind, DecodeErrorKind::UnexpectedEnd);
 }
@@ -74,7 +74,7 @@ TEST(ElementRefDecode, Too_Long_String_Fails_With_OutOfBound_Error)
     auto decoded = be::DecodeString("10:s");
     ASSERT_FALSE(decoded);
     const DecodeError& error = decoded.error();
-    ASSERT_GT(error.pos, 0u);
+    ASSERT_GT(error.position, 0u);
     ASSERT_EQ(ElementId::String, error.element);
     ASSERT_EQ(error.kind, DecodeErrorKind::StringOutOfBound);
 }
@@ -84,7 +84,7 @@ TEST(ElementRefDecode, Missing_Colon_For_String_Fails)
     auto decoded = be::Decode("10");
     ASSERT_FALSE(decoded);
     const DecodeError& error = decoded.error();
-    ASSERT_GT(error.pos, 0u);
+    ASSERT_GT(error.position, 0u);
     ASSERT_EQ(ElementId::String, error.element);
     ASSERT_EQ(error.kind, DecodeErrorKind::MissingStringStart);
 }

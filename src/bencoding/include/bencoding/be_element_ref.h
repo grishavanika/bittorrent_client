@@ -29,7 +29,7 @@ namespace be
     using StorageRef     = std::variant<IntegerRef, StringRef, ListRef, DictionaryRef>;
 
     // Index of ElementId in `StorageRef` variant.
-    constexpr std::size_t ElementIdToIndex(ElementId id)
+    constexpr std::size_t ElementIdToIndex(ElementId id) noexcept
     {
         switch (id)
         {
