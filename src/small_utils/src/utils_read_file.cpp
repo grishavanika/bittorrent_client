@@ -1,31 +1,17 @@
-#include <ScopeGuard.h>
+#include <small_utils/utils_read_file.h>
 
-#include <cstdio>
-#include <cstdlib>
-
-struct FileBuffer
+FileBuffer::FileBuffer(FileBuffer&& rhs) noexcept
+    : data_(std::exchange(rhs.data_, nullptr))
+    , size_(std::exchange(rhs.size_, 0))
 {
-    void* data_ = nullptr;
-    std::size_t size_ = 0;
+}
 
-    FileBuffer() noexcept = default;
-    FileBuffer(const FileBuffer&) = delete;
-    FileBuffer& operator=(const FileBuffer&) = delete;
-    FileBuffer& operator=(FileBuffer&&) = delete;
-
-    FileBuffer(FileBuffer&& rhs) noexcept
-        : data_(std::exchange(rhs.data_, nullptr))
-        , size_(std::exchange(rhs.size_, 0))
-    {
-    }
-
-    ~FileBuffer() noexcept
-    {
-        free(data_);
-        data_ = nullptr;
-        size_ = 0;
-    }
-};
+FileBuffer::~FileBuffer() noexcept
+{
+    free(data_);
+    data_ = nullptr;
+    size_ = 0;
+}
 
 FileBuffer ReadAllFileAsBinary(const char* filepath)
 {

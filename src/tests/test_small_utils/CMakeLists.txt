@@ -1,6 +1,6 @@
-set(exe_name test_bencoding)
+set(exe_name test_small_utils)
 
-set(depends_on_lib bencoding)
+set(depends_on_lib small_utils)
 
 target_collect_sources(${exe_name})
 
@@ -10,5 +10,3 @@ set_all_warnings(${exe_name} PUBLIC)
 
 target_link_libraries(${exe_name} PRIVATE ${depends_on_lib})
 target_link_libraries(${exe_name} PRIVATE GTest_Integrated)
-target_link_libraries(${exe_name} PRIVATE TinySHA1)
-target_link_libraries(${exe_name} PRIVATE small_utils)

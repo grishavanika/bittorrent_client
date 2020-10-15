@@ -1,6 +1,7 @@
-#include <bencoding/be_element_ref_builders.h>
 #include <bencoding/be_element_ref_parse.h>
-#include <bencoding/utils_string.h>
+#include <bencoding/be_element_ref_builders.h>
+
+#include <small_utils/utils_string.h>
 
 #include <cassert>
 
