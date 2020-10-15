@@ -1,6 +1,6 @@
 #include <bencoding/be_element_ref.h>
 #include <bencoding/be_element_ref_builders.h>
-#include <bencoding/be_element_ref_decoder.h>
+#include <bencoding/be_element_ref_parse.h>
 #include <gtest/gtest.h>
 
 using namespace be;

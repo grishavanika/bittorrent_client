@@ -1,4 +1,4 @@
-#include <bencoding/be_torrent_file_metainfo.h>
+#include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/utils_read_file.h>
 #include <gtest/gtest.h>
 
@@ -27,7 +27,7 @@ TEST(Torrent, NormalSingleFileTorrent)
     const FileBuffer buffer = ReadAllFileAsBinary(k_file);
     ASSERT_NE(buffer.data_, nullptr);
     const std::string_view content(static_cast<const char*>(buffer.data_), buffer.size_);
-    std::optional<ParseTorrentFileResult> result = ParseTorrentFileContent(content);
+    std::optional<TorrentFileInfo> result = ParseTorrentFileContent(content);
 
     ASSERT_TRUE(result.has_value());
     ASSERT_EQ("39e063338f06804d40cf1907b123b3a23d3cfd77"
@@ -41,7 +41,7 @@ TEST(Torrent, NormalMultiFileTorrent)
     const FileBuffer buffer = ReadAllFileAsBinary(k_file);
     ASSERT_NE(buffer.data_, nullptr);
     const std::string_view content(static_cast<const char*>(buffer.data_), buffer.size_);
-    std::optional<ParseTorrentFileResult> result = ParseTorrentFileContent(content);
+    std::optional<TorrentFileInfo> result = ParseTorrentFileContent(content);
 
     ASSERT_TRUE(result.has_value());
     ASSERT_EQ("32f6dbf1412d24a370c12cc90d289affb4806284"

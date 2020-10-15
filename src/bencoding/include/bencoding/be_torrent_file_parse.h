@@ -12,7 +12,7 @@ namespace be
 {
     // https://www.bittorrent.org/beps/bep_0003.html
     // .torrent file.
-    struct TorrentFile
+    struct TorrentMetainfo
     {
         struct File
         {
@@ -51,9 +51,9 @@ namespace be
         Info info_; // 'info'.
     };
 
-    struct ParseTorrentFileResult
+    struct TorrentFileInfo
     {
-        TorrentFile torrent_file_;
+        TorrentMetainfo torrent_file_;
 
         // [start; end) of 'info' in the parsed `content`.
         // Do SHA1 to get torrent **info_hash**.
@@ -62,6 +62,6 @@ namespace be
 
     // Makes deep copy for the content.
     // #UUU: add error information.
-    std::optional<ParseTorrentFileResult> ParseTorrentFileContent(std::string_view content);
+    std::optional<TorrentFileInfo> ParseTorrentFileContent(std::string_view content);
 
 } // namespace be
