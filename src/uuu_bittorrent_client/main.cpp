@@ -1,4 +1,6 @@
 #include <bencoding/be_torrent_file_parse.h>
+#include <bencoding/be_element_ref_parse.h>
+#include <bencoding/be_tracker_response_parse.h>
 #include "torrent_client.h"
 #include <small_utils/utils_read_file.h>
 #include <small_utils/utils_url.h>
@@ -30,5 +32,13 @@ int main()
         + "downloaded=" + "0" + "&"
         + "compact="    + "1" + "&"
         + "left="       + std::to_string(pieces);
+
     printf("%s\n", url.c_str());
+
+    const char* const response_file = R"(K:\sample.bin)";
+    const FileBuffer buffer = ReadAllFileAsBinary(response_file);
+    assert(buffer.data_);
+    std::optional<be::TrackerResponse> response = be::ParseTrackerCompactResponseContent(
+        std::string_view(static_cast<const char*>(buffer.data_), buffer.size_));
+    assert(response.has_value());
 }

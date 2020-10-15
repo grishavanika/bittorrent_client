@@ -11,15 +11,9 @@ namespace be
     {
         const char* key_;
         bool (*parse_)(TorrentMetainfo& metainfo, ElementRef& element);
-        bool found_;
+        bool parsed_;
         ElementPosition* position_;
     };
-
-    inline const char* AsConstData(std::string_view str)
-    {
-        assert(!str.empty());
-        return &(str[0]);
-    }
 
     template<unsigned N>
     static bool InvokeParser(TorrentMetainfo& metainfo
@@ -30,15 +24,11 @@ namespace be
     {
         for (KeyParser& state : parsers)
         {
-            if (state.found_)
+            if ((state.parsed_) || (key != state.key_))
             {
                 continue;
             }
-            if (key != state.key_)
-            {
-                continue;
-            }
-            state.found_ = true;
+            state.parsed_ = true;
             ok = state.parse_(metainfo, value);
             if (state.position_)
             {
@@ -340,7 +330,7 @@ namespace be
 
         for (const auto& state : k_parsers)
         {
-            if (!state.found_)
+            if (!state.parsed_)
             {
                 return std::nullopt;
             }

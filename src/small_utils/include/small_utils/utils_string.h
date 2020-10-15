@@ -1,6 +1,7 @@
 #pragma once
 #include <string_view>
 #include <cstdint>
+#include <cassert>
 
 #if __has_include(<charconv>)
 #  include <charconv>
@@ -9,6 +10,12 @@
 #  include <cstdlib>
 #  define BE_HAS_FROM_CHARS() 0
 #endif
+
+inline const char* AsConstData(std::string_view str)
+{
+    assert(!str.empty());
+    return &(str[0]);
+}
 
 inline bool ParseLength(std::string_view str, std::uint64_t& length)
 {
