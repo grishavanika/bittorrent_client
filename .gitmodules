@@ -7,3 +7,6 @@
 [submodule "third_party/deps/TinySHA1-src"]
 	path = third_party/deps/TinySHA1-src
 	url = https://github.com/mohaps/TinySHA1
+[submodule "third_party/deps/scope_guard-src"]
+	path = third_party/deps/scope_guard-src
+	url = https://github.com/grishavanika/folly_scope_guard.git

@@ -1,5 +1,4 @@
-// #UUU: move as third-party dependency.
-#include <bencoding/ScopeGuard.h>
+#include <ScopeGuard.h>
 
 #include <cstdio>
 #include <cstdlib>
