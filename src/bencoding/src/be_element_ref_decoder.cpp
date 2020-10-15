@@ -1,13 +1,6 @@
 #include <bencoding/be_element_ref_builders.h>
 #include <bencoding/be_element_ref_decoder.h>
-
-#if __has_include(<charconv>)
-#  include <charconv>
-#  define BE_HAS_FROM_CHARS() 1
-#else
-#  include <cstdlib>
-#  define BE_HAS_FROM_CHARS() 0
-#endif
+#include <bencoding/utils_string.h>
 
 #include <cassert>
 
@@ -20,48 +13,6 @@ namespace be
         constexpr char k_dictionary_start = 'd';
         constexpr char k_element_end = 'e';
         constexpr char k_string_start = ':';
-
-        bool ParseLength(std::string_view str, std::size_t& length)
-        {
-#if (BE_HAS_FROM_CHARS())
-            const char* begin = str.data();
-            const char* end = begin + str.size();
-            const auto result = std::from_chars(begin, end, length, 10);
-            if ((result.ptr != end) || (result.ec != std::errc()))
-            {
-                return false;
-            }
-            return true;
-#else
-            // https://stackoverflow.com/questions/43787672/the-max-number-of-digits-in-an-int-based-on-number-of-bits
-            static_assert(CHAR_BIT == 8
-                , "Max decimal digits formula assumes byte is 8 bits");
-            constexpr std::size_t k_buf_size = (241 * sizeof(length) / 100 + 1);
-
-            const std::size_t size = str.size();
-            if ((size == 0) || (size >= k_buf_size))
-            {
-                return false;
-            }
-            char temp[k_buf_size + 1];
-#if defined(_MSC_VER)
-            (void)strncpy_s(temp, str.data(), size);
-#else
-            (void)strncpy(temp, str.data(), size);
-#endif
-            temp[size] = '\0';
-            const char* begin = temp;
-            const char* end = begin + size;
-            char* parse_end = nullptr;
-            const unsigned long long v = std::strtoull(begin, &parse_end, 10);
-            if ((begin != end) && (parse_end == end))
-            {
-                length = static_cast<std::size_t>(v);
-                return true;
-            }
-            return false;
-#endif
-        }
 
         using DecodedElementRef = nonstd::expected<ElementRef, DecodeError>;
 
@@ -209,7 +160,7 @@ namespace be
                 }
                 assert(length_element->as_integer());
 
-                std::size_t length = 0;
+                std::uint64_t length = 0;
                 if (!ParseLength(*length_element->as_integer(), length))
                 {
                     return make_error(ElementId::String, DecodeErrorKind::BadStringLength);
@@ -221,7 +172,7 @@ namespace be
                     return make_error(ElementId::String, DecodeErrorKind::StringOutOfBound);
                 }
                 return StringRefBuilder()
-                    .set(std::string_view(begin, length))
+                    .set(std::string_view(begin, std::size_t(length)))
                     .build_once();
             }
 

@@ -22,6 +22,7 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include <exception>
 
 namespace folly {
 
@@ -354,7 +355,7 @@ class ScopeGuardForNewException {
   void operator delete(void*) = delete;
 
   ScopeGuardImpl<FunctionType, ExecuteOnException> guard_;
-  int exceptionCounter_{uncaught_exceptions()};
+  int exceptionCounter_{std::uncaught_exceptions()};
 };
 
 /**
