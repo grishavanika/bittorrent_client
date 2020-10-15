@@ -53,7 +53,7 @@ namespace be
 
     struct TorrentFileInfo
     {
-        TorrentMetainfo torrent_file_;
+        TorrentMetainfo metainfo_;
 
         // [start; end) of 'info' in the parsed `content`.
         // Do SHA1 to get torrent **info_hash**.

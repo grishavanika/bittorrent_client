@@ -10,5 +10,4 @@ set_all_warnings(${exe_name} PUBLIC)
 
 target_link_libraries(${exe_name} PRIVATE ${depends_on_lib})
 target_link_libraries(${exe_name} PRIVATE GTest_Integrated)
-target_link_libraries(${exe_name} PRIVATE TinySHA1)
 target_link_libraries(${exe_name} PRIVATE small_utils)

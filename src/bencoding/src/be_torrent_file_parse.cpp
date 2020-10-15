@@ -347,7 +347,7 @@ namespace be
         }
 
         TorrentFileInfo info;
-        info.torrent_file_ = std::move(metainfo);
+        info.metainfo_ = std::move(metainfo);
         info.info_position_ = info_position;
         return std::optional<TorrentFileInfo>(std::move(info));
     }
