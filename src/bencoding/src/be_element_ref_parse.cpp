@@ -14,7 +14,7 @@ namespace be
         constexpr char k_element_end = 'e';
         constexpr char k_string_start = ':';
 
-        using DecodedElementRef = nonstd::expected<ElementRef, DecodeError>;
+        using DecodedElementRef = nonstd::expected<ElementRef, ParseError>;
 
         struct Decoder
         {
@@ -52,28 +52,28 @@ namespace be
                 RememberPosition& operator=(RememberPosition&&) = delete;
             };
 
-            DecodedElementRef decode_element(ElementId parent_id = ElementId::None)
+            DecodedElementRef parse_element(ElementId parent_id = ElementId::None)
             {
                 if (current_ >= end_)
                 {
-                    return make_error(parent_id, DecodeErrorKind::UnexpectedEnd);
+                    return make_error(parent_id, ParseErrorKind::UnexpectedEnd);
                 }
                 switch (*current_)
                 {
-                case k_integer_start    : return decode_integer();
-                case k_list_start       : return decode_list();
-                case k_dictionary_start : return decode_dictionary();
-                default                 : return decode_string();
+                case k_integer_start    : return parse_integer();
+                case k_list_start       : return parse_list();
+                case k_dictionary_start : return parse_dictionary();
+                default                 : return parse_string();
                 }
             }
 
-            DecodedElementRef decode_integer()
+            DecodedElementRef parse_integer()
             {
                 const RememberPosition position(*this);
 
                 if (!consume(k_integer_start))
                 {
-                    return make_error(ElementId::Integer, DecodeErrorKind::MissingIntegerStart);
+                    return make_error(ElementId::Integer, ParseErrorKind::MissingIntegerStart);
                 }
                 const char* const begin = current_;
                 const bool has_sign = (has_data() && (*begin == '-'));
@@ -90,53 +90,53 @@ namespace be
                     }
                     else
                     {
-                        return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                        return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                     }
                 }
 
                 const char* const last = current_;
                 if (!consume(k_element_end))
                 {
-                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                 }
 
                 if (begin == last)
                 {
                     // Missing number's digits: "ie".
-                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                 }
                 else if (has_sign && (last == (begin + 1)))
                 {
                     // Only `-` was specified: "i-e".
-                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                 }
                 else if (has_sign && *(begin + 1) == '0')
                 {
                     // "i-0e" case.
-                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                 }
                 else if ((*begin == '0') && (last > (begin + 1)))
                 {
                     // "i03e" case.
-                    return make_error(ElementId::Integer, DecodeErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
                 }
                 return IntegerRefBuilder()
                     .set(std::string_view(begin, last - begin))
                     .build_once(position.get());
             }
 
-            DecodedElementRef decode_list()
+            DecodedElementRef parse_list()
             {
                 const RememberPosition position(*this);
 
                 if (!consume(k_list_start))
                 {
-                    return make_error(ElementId::String, DecodeErrorKind::MissingListStart);
+                    return make_error(ElementId::String, ParseErrorKind::MissingListStart);
                 }
                 ListRefBuilder builder;
                 while (has_data() && (*current_ != k_element_end))
                 {
-                    auto element = decode_element(ElementId::List);
+                    auto element = parse_element(ElementId::List);
                     if (!element)
                     {
                         return element;
@@ -145,32 +145,32 @@ namespace be
                 }
                 if (!consume(k_element_end))
                 {
-                    return make_error(ElementId::String, DecodeErrorKind::MissingListEnd);
+                    return make_error(ElementId::String, ParseErrorKind::MissingListEnd);
                 }
                 return builder.build_once(position.get());
             }
 
-            DecodedElementRef decode_dictionary()
+            DecodedElementRef parse_dictionary()
             {
                 const RememberPosition position(*this);
 
                 if (!consume(k_dictionary_start))
                 {
-                    return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryStart);
+                    return make_error(ElementId::Dictionary, ParseErrorKind::MissingDictionaryStart);
                 }
                 DictionaryRefBuilder builder;
                 while (has_data() && (*current_ != k_element_end))
                 {
-                    auto key = decode_element(ElementId::Dictionary);
+                    auto key = parse_element(ElementId::Dictionary);
                     if (!key)
                     {
                         return key;
                     }
                     if (!key->as_string())
                     {
-                        return make_error(ElementId::Dictionary, DecodeErrorKind::NonStringAsDictionaryKey);
+                        return make_error(ElementId::Dictionary, ParseErrorKind::NonStringAsDictionaryKey);
                     }
-                    auto value = decode_element(ElementId::Dictionary);
+                    auto value = parse_element(ElementId::Dictionary);
                     if (!value)
                     {
                         return value;
@@ -179,16 +179,16 @@ namespace be
                 }
                 if (!consume(k_element_end))
                 {
-                    return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryEnd);
+                    return make_error(ElementId::Dictionary, ParseErrorKind::MissingDictionaryEnd);
                 }
                 return builder.build_once(position.get());
             }
 
-            DecodedElementRef decode_string()
+            DecodedElementRef parse_string()
             {
                 const RememberPosition position(*this);
 
-                auto length_element = decode_string_length();
+                auto length_element = parse_string_length();
                 if (!length_element)
                 {
                     return length_element;
@@ -198,13 +198,13 @@ namespace be
                 std::uint64_t length = 0;
                 if (!ParseLength(*length_element->as_integer(), length))
                 {
-                    return make_error(ElementId::String, DecodeErrorKind::BadStringLength);
+                    return make_error(ElementId::String, ParseErrorKind::BadStringLength);
                 }
 
                 const char* const begin = current_;
                 if (!consume_n(length))
                 {
-                    return make_error(ElementId::String, DecodeErrorKind::StringOutOfBound);
+                    return make_error(ElementId::String, ParseErrorKind::StringOutOfBound);
                 }
                 return StringRefBuilder()
                     .set(std::string_view(begin, std::size_t(length)))
@@ -217,9 +217,9 @@ namespace be
             }
 
         private:
-            DecodedElementRef make_error(ElementId element, DecodeErrorKind kind) const
+            DecodedElementRef make_error(ElementId element, ParseErrorKind kind) const
             {
-                DecodeError error;
+                ParseError error;
                 error.position = (current_ - start_);
                 error.element = element;
                 error.kind = kind;
@@ -246,7 +246,7 @@ namespace be
                 return false;
             }
 
-            DecodedElementRef decode_string_length()
+            DecodedElementRef parse_string_length()
             {
                 const RememberPosition position(*this);
 
@@ -264,19 +264,19 @@ namespace be
                     }
                     else
                     {
-                        return make_error(ElementId::String, DecodeErrorKind::UnexpectedStringLength);
+                        return make_error(ElementId::String, ParseErrorKind::UnexpectedStringLength);
                     }
                 }
 
                 if (begin == current_)
                 {
                     // Missing number's digits: ":str" or empty string "".
-                    return make_error(ElementId::String, DecodeErrorKind::UnexpectedStringLength);
+                    return make_error(ElementId::String, ParseErrorKind::UnexpectedStringLength);
                 }
 
                 if (!consume(k_string_start))
                 {
-                    return make_error(ElementId::String, DecodeErrorKind::MissingStringStart);
+                    return make_error(ElementId::String, ParseErrorKind::MissingStringStart);
                 }
 
                 return IntegerRefBuilder()
@@ -291,14 +291,14 @@ namespace be
         };
     } // namespace
 
-    Decoded<ListRef> Decode(std::string_view bencoded)
+    Parsed<ListRef> Parse(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
 
         ListRef elements;
         do
         {
-            auto element = decoder.decode_element();
+            auto element = decoder.parse_element();
             if (element)
             {
                 elements.push_back(std::move(*element));
@@ -308,13 +308,13 @@ namespace be
         }
         while (decoder.has_data());
 
-        return Decoded<ListRef>(std::move(elements));
+        return Parsed<ListRef>(std::move(elements));
     }
 
-    Decoded<StringRef> DecodeString(std::string_view bencoded)
+    Parsed<StringRef> ParseString(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.decode_string();
+        auto element = decoder.parse_string();
         if (element)
         {
             assert(element->as_string());
@@ -323,10 +323,10 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<IntegerRef> DecodeInteger(std::string_view bencoded)
+    Parsed<IntegerRef> ParseInteger(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.decode_integer();
+        auto element = decoder.parse_integer();
         if (element)
         {
             assert(element->as_integer());
@@ -335,10 +335,10 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<ListRef> DecodeList(std::string_view bencoded)
+    Parsed<ListRef> ParseList(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.decode_list();
+        auto element = decoder.parse_list();
         if (element)
         {
             assert(element->as_list());
@@ -347,10 +347,10 @@ namespace be
         return nonstd::make_unexpected(element.error());
     }
 
-    Decoded<DictionaryRef> DecodeDictionary(std::string_view bencoded)
+    Parsed<DictionaryRef> ParseDictionary(std::string_view bencoded)
     {
         Decoder decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.decode_dictionary();
+        auto element = decoder.parse_dictionary();
         if (element)
         {
             assert(element->as_dictionary());

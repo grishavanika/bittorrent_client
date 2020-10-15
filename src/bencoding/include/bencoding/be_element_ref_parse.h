@@ -3,7 +3,7 @@
 
 namespace be
 {
-    enum class DecodeErrorKind
+    enum class ParseErrorKind
     {
         Unknown,
         UnexpectedEnd,
@@ -21,20 +21,20 @@ namespace be
         MissingStringStart,
     };
 
-    struct DecodeError
+    struct ParseError
     {
         std::size_t position = 0u;
         ElementId element = ElementId::None;
-        DecodeErrorKind kind = DecodeErrorKind::Unknown;
+        ParseErrorKind kind = ParseErrorKind::Unknown;
     };
 
     template<typename T>
-    using Decoded = nonstd::expected<T, DecodeError>;
+    using Parsed = nonstd::expected<T, ParseError>;
 
-    Decoded<ListRef>       Decode(std::string_view bencoded);
-    Decoded<StringRef>     DecodeString(std::string_view bencoded);
-    Decoded<IntegerRef>    DecodeInteger(std::string_view bencoded);
-    Decoded<ListRef>       DecodeList(std::string_view bencoded);
-    Decoded<DictionaryRef> DecodeDictionary(std::string_view bencoded);
+    Parsed<ListRef>       Parse(std::string_view bencoded);
+    Parsed<StringRef>     ParseString(std::string_view bencoded);
+    Parsed<IntegerRef>    ParseInteger(std::string_view bencoded);
+    Parsed<ListRef>       ParseList(std::string_view bencoded);
+    Parsed<DictionaryRef> ParseDictionary(std::string_view bencoded);
 
 } // namespace be
