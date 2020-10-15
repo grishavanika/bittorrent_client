@@ -4,3 +4,6 @@
 [submodule "third_party/deps/expected-lite-src"]
 	path = third_party/deps/expected-lite-src
 	url = https://github.com/martinmoene/expected-lite.git
+[submodule "third_party/deps/TinySHA1-src"]
+	path = third_party/deps/TinySHA1-src
+	url = https://github.com/mohaps/TinySHA1

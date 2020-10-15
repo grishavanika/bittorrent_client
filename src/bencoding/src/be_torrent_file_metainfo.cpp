@@ -11,6 +11,7 @@ namespace be
             const char* key_;
             bool (*parse_)(TorrentFile& metainfo, ElementRef& ref);
             bool found_;
+            ElementPosition* position_;
         };
 
         template<unsigned N>
@@ -29,6 +30,10 @@ namespace be
                 {
                     state.found_ = true;
                     ok = state.parse_(metainfo, value);
+                    if (state.position_)
+                    {
+                        *state.position_ = value.position();
+                    }
                     return true;
                 }
             }
@@ -270,11 +275,11 @@ namespace be
 
             KeyParser k_parsers[] =
             {
-                {"name",         &ParseInfo_Name,        false},
-                {"piece length", &ParseInfo_PieceLength, false},
-                {"pieces",       &ParseInfo_Pieces,      false},
-                {"length",       &ParseInfo_Length,      false},
-                {"files",        &ParseInfo_Files,       false},
+                {"name",         &ParseInfo_Name,        false, nullptr},
+                {"piece length", &ParseInfo_PieceLength, false, nullptr},
+                {"pieces",       &ParseInfo_Pieces,      false, nullptr},
+                {"length",       &ParseInfo_Length,      false, nullptr},
+                {"files",        &ParseInfo_Files,       false, nullptr},
             };
 
             for (auto& [name, ref] : *data)
@@ -301,7 +306,7 @@ namespace be
         }
     } // namespace
 
-    std::optional<TorrentFile> ParseTorrentFileContent(std::string_view content)
+    std::optional<ParseTorrentFileResult> ParseTorrentFileContent(std::string_view content)
     {
         Decoded<DictionaryRef> data = DecodeDictionary(content);
         if (!data.has_value())
@@ -309,10 +314,11 @@ namespace be
             return std::nullopt;
         }
 
+        ElementPosition info_position;
         KeyParser k_parsers[] =
         {
-            {"announce", &ParseAnnounce, false},
-            {"info",     &ParseInfo,     false},
+            {"announce", &ParseAnnounce, false, nullptr},
+            {"info",     &ParseInfo,     false, &info_position},
         };
 
         TorrentFile metainfo;
@@ -334,6 +340,9 @@ namespace be
             }
         }
 
-        return std::optional<TorrentFile>(std::move(metainfo));
+        ParseTorrentFileResult result;
+        result.torrent_file_ = std::move(metainfo);
+        result.info_position_ = info_position;
+        return std::optional<ParseTorrentFileResult>(std::move(result));
     }
 } // namespace be

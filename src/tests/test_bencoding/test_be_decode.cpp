@@ -12,13 +12,13 @@ namespace
     public:
         StringsListRefBuilder& add(std::string_view str)
         {
-            list_.add(StringRefBuilder().set(str).build_once());
+            list_.add(StringRefBuilder().set(str).build_once({}));
             return *this;
         }
 
         ListRef build_once()
         {
-            return std::move(*list_.build_once().as_list());
+            return std::move(*list_.build_once({}).as_list());
         }
 
     private:
@@ -31,13 +31,13 @@ namespace
         StringsDictionaryRefBuilder& add(std::string_view key,
             std::string_view value)
         {
-            dict_.add(std::move(key), StringRefBuilder().set(value).build_once());
+            dict_.add(std::move(key), StringRefBuilder().set(value).build_once({}));
             return *this;
         }
 
         DictionaryRef build_once()
         {
-            return std::move(*dict_.build_once().as_dictionary());
+            return std::move(*dict_.build_once({}).as_dictionary());
         }
 
     private:
@@ -120,10 +120,10 @@ TEST(ElementRefDecode, Dictionary_With_List_Value)
     const auto expected =
         *DictionaryRefBuilder()
             .add("spam", ListRefBuilder()
-                .add(StringRefBuilder().set("a").build_once())
-                .add(StringRefBuilder().set("b").build_once())
-                .build_once())
-            .build_once()
+                .add(StringRefBuilder().set("a").build_once({}))
+                .add(StringRefBuilder().set("b").build_once({}))
+                .build_once({}))
+            .build_once({})
             .as_dictionary();
 
     ASSERT_EQ(expected, *decoded);

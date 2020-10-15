@@ -51,8 +51,17 @@ namespace be
         Info info_; // 'info'.
     };
 
+    struct ParseTorrentFileResult
+    {
+        TorrentFile torrent_file_;
+
+        // [start; end) of 'info' in the parsed `content`.
+        // Do SHA1 to get torrent **info_hash**.
+        ElementPosition info_position_;
+    };
+
     // Makes deep copy for the content.
     // #UUU: add error information.
-    std::optional<TorrentFile> ParseTorrentFileContent(std::string_view content);
+    std::optional<ParseTorrentFileResult> ParseTorrentFileContent(std::string_view content);
 
 } // namespace be

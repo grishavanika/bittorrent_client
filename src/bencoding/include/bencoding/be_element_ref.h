@@ -42,13 +42,20 @@ namespace be
         return std::size_t(-1);
     }
 
+    struct ElementPosition
+    {
+        std::size_t start_ = 0;
+        std::size_t end_ = 0;
+    };
+
     class ElementRef
     {
     public:
-        explicit ElementRef(StorageRef&& storage);
+        explicit ElementRef(StorageRef&& storage, ElementPosition p);
 
     public:
         ElementId element_id() const;
+        ElementPosition position() const;
 
         const StringRef* as_string() const;
         StringRef* as_string();
@@ -68,10 +75,12 @@ namespace be
 
     private:
         StorageRef storage_;
+        ElementPosition position_;
     };
 
-    /*explicit*/ inline ElementRef::ElementRef(StorageRef&& storage)
+    /*explicit*/ inline ElementRef::ElementRef(StorageRef&& storage, ElementPosition p)
         : storage_(std::move(storage))
+        , position_(p)
     {
     }
 
@@ -85,6 +94,11 @@ namespace be
         case ElementIdToIndex(ElementId::Dictionary): return ElementId::Dictionary;
         }
         return ElementId::None;
+    }
+
+    inline ElementPosition ElementRef::position() const
+    {
+        return position_;
     }
 
     inline const StringRef* ElementRef::as_string() const

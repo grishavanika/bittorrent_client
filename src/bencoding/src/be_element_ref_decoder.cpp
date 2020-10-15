@@ -25,6 +25,33 @@ namespace be
             {
             }
 
+            struct RememberPosition
+            {
+                RememberPosition(const Decoder& self) noexcept
+                    : self_(self)
+                    , start_(self.current_)
+                {
+                    assert(start_ >= self_.start_);
+                }
+
+                ElementPosition get() const
+                {
+                    assert(self_.current_ >= start_);
+                    ElementPosition p;
+                    p.start_ = (start_ - self_.start_);
+                    p.end_ = (self_.current_ - self_.start_);
+                    return p;
+                }
+
+                const Decoder& self_;
+                const char* const start_;
+
+                RememberPosition(const RememberPosition&) = delete;
+                RememberPosition(RememberPosition&&) = delete;
+                RememberPosition& operator=(const RememberPosition&) = delete;
+                RememberPosition& operator=(RememberPosition&&) = delete;
+            };
+
             DecodedElementRef decode_element(ElementId parent_id = ElementId::None)
             {
                 if (current_ >= end_)
@@ -42,6 +69,8 @@ namespace be
 
             DecodedElementRef decode_integer()
             {
+                const RememberPosition position(*this);
+
                 if (!consume(k_integer_start))
                 {
                     return make_error(ElementId::Integer, DecodeErrorKind::MissingIntegerStart);
@@ -93,11 +122,13 @@ namespace be
                 }
                 return IntegerRefBuilder()
                     .set(std::string_view(begin, last - begin))
-                    .build_once();
+                    .build_once(position.get());
             }
 
             DecodedElementRef decode_list()
             {
+                const RememberPosition position(*this);
+
                 if (!consume(k_list_start))
                 {
                     return make_error(ElementId::String, DecodeErrorKind::MissingListStart);
@@ -116,11 +147,13 @@ namespace be
                 {
                     return make_error(ElementId::String, DecodeErrorKind::MissingListEnd);
                 }
-                return builder.build_once();
+                return builder.build_once(position.get());
             }
 
             DecodedElementRef decode_dictionary()
             {
+                const RememberPosition position(*this);
+
                 if (!consume(k_dictionary_start))
                 {
                     return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryStart);
@@ -148,11 +181,13 @@ namespace be
                 {
                     return make_error(ElementId::Dictionary, DecodeErrorKind::MissingDictionaryEnd);
                 }
-                return builder.build_once();
+                return builder.build_once(position.get());
             }
 
             DecodedElementRef decode_string()
             {
+                const RememberPosition position(*this);
+
                 auto length_element = decode_string_length();
                 if (!length_element)
                 {
@@ -173,7 +208,7 @@ namespace be
                 }
                 return StringRefBuilder()
                     .set(std::string_view(begin, std::size_t(length)))
-                    .build_once();
+                    .build_once(position.get());
             }
 
             [[nodiscard]] bool has_data() const
@@ -213,6 +248,8 @@ namespace be
 
             DecodedElementRef decode_string_length()
             {
+                const RememberPosition position(*this);
+
                 const char* begin = current_;
                 while (has_data())
                 {
@@ -244,7 +281,7 @@ namespace be
 
                 return IntegerRefBuilder()
                     .set(std::string_view(begin, current_ - begin - 1))
-                    .build_once();
+                    .build_once(position.get());
             }
 
         private:

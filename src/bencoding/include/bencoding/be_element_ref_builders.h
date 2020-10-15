@@ -12,10 +12,10 @@ namespace be
             return *this;
         }
 
-        ElementRef build_once()
+        ElementRef build_once(ElementPosition p)
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::List)>();
-            return ElementRef(StorageRef(tag, std::move(list_)));
+            return ElementRef(StorageRef(tag, std::move(list_)), p);
         }
 
     private:
@@ -34,10 +34,10 @@ namespace be
             return *this;
         }
 
-        ElementRef build_once()
+        ElementRef build_once(ElementPosition p)
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::Dictionary)>();
-            return ElementRef(StorageRef(tag, std::move(dict_)));
+            return ElementRef(StorageRef(tag, std::move(dict_)), p);
         }
 
     private:
@@ -53,10 +53,10 @@ namespace be
             return *this;
         }
 
-        ElementRef build_once()
+        ElementRef build_once(ElementPosition p)
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::Integer)>();
-            return ElementRef(StorageRef(tag, std::move(number_)));
+            return ElementRef(StorageRef(tag, std::move(number_)), p);
         }
 
     private:
@@ -72,10 +72,10 @@ namespace be
             return *this;
         }
 
-        ElementRef build_once()
+        ElementRef build_once(ElementPosition p)
         {
             constexpr auto tag = std::in_place_index_t<ElementIdToIndex(ElementId::String)>();
-            return ElementRef(StorageRef(tag, std::move(str_)));
+            return ElementRef(StorageRef(tag, std::move(str_)), p);
         }
 
     private:
