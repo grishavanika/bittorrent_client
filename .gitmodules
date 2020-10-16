@@ -13,3 +13,6 @@
 [submodule "third_party/deps/CxxUrl-src"]
 	path = third_party/deps/CxxUrl-src
 	url = https://github.com/grishavanika/CxxUrl
+[submodule "third_party/deps/asio-src"]
+	path = third_party/deps/asio-src
+	url = https://github.com/chriskohlhoff/asio.git

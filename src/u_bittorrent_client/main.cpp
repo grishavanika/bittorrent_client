@@ -5,6 +5,13 @@
 #include <bencoding/be_tracker_response_parse.h>
 #include <small_utils/utils_read_file.h>
 
+//#include <asio/co_spawn.hpp>
+//#include <asio/detached.hpp>
+#include <asio/io_context.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/signal_set.hpp>
+#include <asio/write.hpp>
+
 #include <random>
 
 #include <cstdio>
@@ -16,6 +23,10 @@
 
 int main()
 {
+    // #UUU: ASIO with coroutines:
+    // https://github.com/chriskohlhoff/asio/blob/master/asio/src/examples/cpp17/coroutines_ts/echo_server.cpp
+    // 
+
     const char* const torrent_file = R"(K:\debian-edu-10.6.0-amd64-netinst.iso.torrent)";
     std::random_device random;
     auto client = be::TorrentClient::make(torrent_file, random);
@@ -31,4 +42,5 @@ int main()
     std::optional<be::TrackerResponse> response = be::ParseTrackerCompactResponseContent(
         std::string_view(static_cast<const char*>(buffer.data_), buffer.size_));
     assert(response.has_value());
+    return 0;
 }
