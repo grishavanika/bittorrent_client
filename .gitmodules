@@ -10,3 +10,6 @@
 [submodule "third_party/deps/scope_guard-src"]
 	path = third_party/deps/scope_guard-src
 	url = https://github.com/grishavanika/folly_scope_guard.git
+[submodule "third_party/deps/CxxUrl-src"]
+	path = third_party/deps/CxxUrl-src
+	url = https://github.com/grishavanika/CxxUrl

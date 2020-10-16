@@ -1,5 +1,6 @@
 # GoogleTest integration
 include(FetchContent)
+include(CMakePrintHelpers)
 
 macro(find_gtest found_gtest)
 
@@ -85,6 +86,7 @@ macro(setup_gtest_from_git)
 	if (NOT gtest_POPULATED)
 		FetchContent_Populate(gtest)
 	endif ()
+	cmake_print_variables(gtest_SOURCE_DIR)
 
 	# GoogleTest uses static C++ runtime by default,
 	# use C++ as dll instead

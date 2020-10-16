@@ -1,4 +1,5 @@
 include(FetchContent)
+include(CMakePrintHelpers)
 
 FetchContent_Declare(
 	expected_lite
@@ -8,6 +9,7 @@ FetchContent_GetProperties(expected_lite)
 if (NOT expected_lite_POPULATED)
 	FetchContent_Populate(expected_lite)
 endif ()
+cmake_print_variables(expected_lite_SOURCE_DIR)
 
 add_subdirectory(${expected_lite_SOURCE_DIR} ${expected_lite_BINARY_DIR} EXCLUDE_FROM_ALL)
 

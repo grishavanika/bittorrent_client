@@ -1,9 +1,9 @@
+#include "torrent_client.h"
+
 #include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/be_element_ref_parse.h>
 #include <bencoding/be_tracker_response_parse.h>
-#include "torrent_client.h"
 #include <small_utils/utils_read_file.h>
-#include <small_utils/utils_url.h>
 
 #include <random>
 
@@ -20,20 +20,10 @@ int main()
     std::random_device random;
     auto client = be::TorrentClient::make(torrent_file, random);
     assert(client);
-
-    const std::size_t pieces = (client->metainfo_.info_.pieces_SHA1_.size() / 20);
-    // Cool work with URLs in C++.
-    const std::string url =
-        client->metainfo_.tracker_url_utf8_ + "?"
-        + "info_hash="  + UrlEscape(client->info_hash_.data_, sizeof(client->info_hash_.data_)) + "&"
-        + "peer_id="    + UrlEscape(client->peer_id_.data_, sizeof(client->peer_id_.data_)) + "&"
-        + "port="       + "6882" + "&"
-        + "uploaded="   + "0" + "&"
-        + "downloaded=" + "0" + "&"
-        + "compact="    + "1" + "&"
-        + "left="       + std::to_string(pieces);
-
-    printf("%s\n", url.c_str());
+    auto http = client->get_tracker_request_info();
+    assert(http);
+    
+    printf("%s:%u%s\n", http->host_.c_str(), unsigned(http->port_), http->get_uri_.c_str());
 
     const char* const response_file = R"(K:\sample.bin)";
     const FileBuffer buffer = ReadAllFileAsBinary(response_file);

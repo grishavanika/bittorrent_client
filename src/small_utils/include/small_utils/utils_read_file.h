@@ -1,7 +1,10 @@
 #include <ScopeGuard.h>
 
+#include <string_view>
+
 #include <cstdio>
 #include <cstdlib>
+#include <cassert>
 
 struct FileBuffer
 {
@@ -18,3 +21,17 @@ struct FileBuffer
 };
 
 FileBuffer ReadAllFileAsBinary(const char* filepath);
+
+inline std::string_view AsStringView(const FileBuffer& buffer
+    , std::size_t start, std::size_t end)
+{
+    assert(start <= end);
+    assert(end <= buffer.size_);
+    const auto ptr = (static_cast<const char*>(buffer.data_) + start);
+    return std::string_view(ptr, (end - start));
+}
+
+inline std::string_view AsStringView(const FileBuffer& buffer)
+{
+    return std::string_view(static_cast<const char*>(buffer.data_), buffer.size_);
+}
