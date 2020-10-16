@@ -73,7 +73,7 @@ namespace be
         static_assert(sizeof(PeerInfo::port_) == 2);
 
         StringRef* peers_blob = interval.as_string();
-        if (!peers_blob)
+        if (!peers_blob || peers_blob->empty())
         {
             return false;
         }
@@ -91,8 +91,7 @@ namespace be
         const char* const end = current + peers_blob->size();
         while (current != end)
         {
-            state->peers_.emplace_back(PeerInfo{});
-            PeerInfo& peer = state->peers_.back();
+            PeerInfo& peer = state->peers_.emplace_back(PeerInfo{});
             std::memcpy(&peer.ipv4_, current, sizeof(peer.ipv4_));
             current += sizeof(peer.ipv4_);
             std::memcpy(&peer.port_, current, sizeof(peer.port_));
