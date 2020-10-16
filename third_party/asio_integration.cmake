@@ -36,6 +36,8 @@ if (MSVC)
     target_compile_options(asio INTERFACE
         # 'static': an explicit specialization cannot have a storage class (ignored)
         /wd4499
+		# declaration of 'query' hides global declaration
+        /wd4459
         )
 endif ()
 
