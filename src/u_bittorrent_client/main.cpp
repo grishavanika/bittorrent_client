@@ -26,11 +26,64 @@ asio::awaitable<bool> PeerLoop(be::TorrentPeer& peer
     , const be::TorrentClient& client)
 {
     peer.socket_ = co_await peer.do_connect(address);
-    peer.info_ = co_await peer.do_handshake(
-        client.info_hash_, client.peer_id_);
+    if (!peer.socket_) { co_return false; }
+    peer.info_ = co_await peer.do_handshake(client.info_hash_, client.peer_id_);
     if (!peer.info_) { co_return false; }
-    peer.bitfield_ = co_await peer.do_read_bitfield();
-    co_return bool(peer.bitfield_);
+
+    peer.bitfield_ = co_await be::ReadMessage<be::Message_Bitfield>(*peer.socket_);
+    if (!peer.bitfield_) { co_return false; }
+    bool ok = co_await be::SendMessage(*peer.socket_, be::Message_Unchoke());
+    if (!ok) { co_return false; }
+    ok = co_await be::SendMessage(*peer.socket_, be::Message_Interested());
+    if (!ok) { co_return false; }
+
+    bool sent_sample = false;
+    while (true)
+    {
+        be::AnyMessage m = co_await be::ReadAnyMessage(*peer.socket_);
+        switch (m.index())
+        {
+        case 0/*std::monostate*/: co_return false;
+        case 1/*Message_Choke*/: peer.unchocked_ = false; break;
+        case 2/*Message_Unchoke*/: peer.unchocked_ = true; break;
+        case 3/*Message_Interested*/: /*not implemented*/ break;
+        case 4/*Message_NotInterested*/: /*not implemented*/ break;
+        case 5/*Message_Have*/:
+        {
+            const auto& have = std::get<be::Message_Have>(m);
+            if (!peer.bitfield_->set_piece(have.piece_index_))
+            {
+                co_return false;
+            }
+            break;
+        }
+        case 6/*Message_Bitfield*/: /*not possible*/ assert(false); break;
+        case 7/*Message_Request*/: /*not implemented*/ break;
+        case 8/*Message_Piece*/:
+        {
+            auto& piece = std::get<be::Message_Piece>(m);
+            (void)piece;
+            break;
+        }
+        case 9/*Message_Cancel*/: /*not implemented*/ break;
+        case 10/*Message_KeepAlive*/: /*do nothing*/ break;
+        case 11/*Message_Unknown*/: /*ignore*/ break;
+        default: /*not possible, should be Message_Unknown*/ assert(false); break;
+        }
+
+        if (peer.unchocked_ && !sent_sample)
+        {
+            be::Message_Request request;
+            const std::uint64_t k_max_block = 16384;
+            request.length_ = std::uint32_t(std::min<std::uint64_t>(
+                client.metainfo_.info_.piece_length_bytes_, k_max_block));
+            request.piece_index_ = 0;
+            request.offset_ = 0;
+            ok = co_await be::SendMessage(*peer.socket_, request);
+            if (!ok) { co_return false; }
+        }
+    }
+    co_return true;
 }
 
 int main()

@@ -194,7 +194,7 @@ namespace be
         TorrentMetainfo::File file;
         file.length_bytes_ = length_bytes;
         file.path_utf8_ = JoinUTF8PartsToString(*path_parts, total_length);
-        return std::optional<TorrentMetainfo::File>(std::move(file));
+        return std::move(file);
     }
 
     static bool ParseInfo_Files(TorrentMetainfo& metainfo, ElementRef& files_)
@@ -339,6 +339,6 @@ namespace be
         TorrentFileInfo info;
         info.metainfo_ = std::move(metainfo);
         info.info_position_ = info_position;
-        return std::optional<TorrentFileInfo>(std::move(info));
+        return std::move(info);
     }
 } // namespace be

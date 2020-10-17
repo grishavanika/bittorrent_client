@@ -172,11 +172,4 @@ namespace be
         co_return info;
     }
 
-    asio::awaitable<std::optional<Message_Bitfield>>
-        TorrentPeer::do_read_bitfield()
-    {
-        assert(socket_);
-        co_return co_await ReadMessage<Message_Bitfield>(*socket_);
-    }
-
 } // namespace be

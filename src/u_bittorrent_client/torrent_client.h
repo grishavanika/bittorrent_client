@@ -27,9 +27,6 @@ namespace be
         // (2)
         asio::awaitable<std::optional<PeerInfo>>
             do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id);
-        // (3)
-        asio::awaitable<std::optional<Message_Bitfield>>
-            do_read_bitfield();
 
         asio::io_context* io_context_ = nullptr;
         // std::optional<> to default-construct.
@@ -37,6 +34,7 @@ namespace be
         // Information about peer that we are connected to.
         std::optional<PeerInfo> info_;
         std::optional<Message_Bitfield> bitfield_;
+        bool unchocked_ = false;
     };
 
     struct TorrentClient

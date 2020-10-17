@@ -4,6 +4,7 @@
 #include <asio/detail/socket_ops.hpp>
 #include <asio/redirect_error.hpp>
 #include <asio/use_awaitable.hpp>
+#include <asio/write.hpp>
 #include <asio/read.hpp>
 
 #include <cstring>
@@ -53,12 +54,12 @@ namespace be
             return std::uint32_t(host_to_network_long(
                 asio::detail::u_long_type(size)));
         }
-    }
 
-    static std::uint32_t NetworkToHostOrder(std::uint32_t v)
-    {
-        return std::uint32_t(network_to_host_long(
-            asio::detail::u_long_type(v)));
+        std::uint32_t NetworkToHostOrder(std::uint32_t v)
+        {
+            return std::uint32_t(network_to_host_long(
+                asio::detail::u_long_type(v)));
+        }
     }
 
     template<typename M>
@@ -84,7 +85,7 @@ namespace be
         (void)co_await asio::async_read(peer
             , asio::buffer(&length, sizeof(length)), coro);
         if (ec) { co_return AnyMessage(); }
-        length = NetworkToHostOrder(length);
+        length = detail::NetworkToHostOrder(length);
         if (length == 0)
         {
             AnyMessage m;
@@ -117,6 +118,23 @@ namespace be
         co_return m;
     }
 
+    asio::awaitable<bool> SendAnyMessage(asio::ip::tcp::socket& peer
+        , const void* data, std::size_t size)
+    {
+        if (!data || (size == 0))
+        {
+            co_return false;
+        }
+
+        std::error_code ec;
+        auto coro = asio::redirect_error(asio::use_awaitable, ec);
+
+        (void)co_await asio::async_write(peer
+            , asio::buffer(data, size), coro);
+        if (ec) { co_return false; }
+        co_return true;
+    }
+
     bool Message_Bitfield::has_piece(std::size_t index) const
     {
         // We store message id (1 byte at the beginning of the buffer).
@@ -136,5 +154,20 @@ namespace be
         // Shift to the right, skip 1-byte PeerMessageId.
         const std::uint8_t mask = data_[byte_index + 1];
         return (((mask >> (7u - offset)) & 1u) != 0u);
+    }
+
+    bool Message_Bitfield::set_piece(std::size_t index)
+    {
+        const std::size_t byte_index = (index / 8);
+        const std::size_t offset = (index % 8);
+        const std::size_t count = (data_.size() - 1);
+        if (byte_index >= count)
+        {
+            return false;
+        }
+        // Shift to the right, skip 1-byte PeerMessageId.
+        std::uint8_t& mask = data_[byte_index + 1];
+        mask |= (1u << (7u - offset));
+        return true;
     }
 }

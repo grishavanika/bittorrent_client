@@ -132,4 +132,13 @@ struct BytesReader
         current_ += size;
         return *this;
     }
+
+    std::size_t available() const
+    {
+        if (valid_)
+        {
+            return std::size_t(end_ - current_);
+        }
+        return std::size_t(-1);
+    }
 };
