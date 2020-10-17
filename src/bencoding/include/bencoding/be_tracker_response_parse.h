@@ -8,7 +8,7 @@
 namespace be
 {
 
-    struct PeerInfo
+    struct PeerAddress
     {
         // Network (big-endian) order.
         std::uint32_t ipv4_ = 0;
@@ -21,7 +21,7 @@ namespace be
         struct OnSuccess
         {
             std::uint64_t rerequest_dt_secs_ = 0;
-            std::vector<PeerInfo> peers_;
+            std::vector<PeerAddress> peers_;
         };
         struct OnError
         {

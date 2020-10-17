@@ -1,5 +1,4 @@
 #include "torrent_client.h"
-#include "torrent_messages.h"
 #include "utils_http.h"
 
 #include <bencoding/be_torrent_file_parse.h>
@@ -121,7 +120,7 @@ namespace be
     }
 
     asio::awaitable<std::optional<asio::ip::tcp::socket>>
-        TorrentPeer::do_connect(PeerInfo info)
+        TorrentPeer::do_connect(PeerAddress address)
     {
         // network_to_*
         using namespace asio::detail::socket_ops;
@@ -130,8 +129,8 @@ namespace be
         auto coro = asio::redirect_error(asio::use_awaitable, ec);
 
         const asio::ip::tcp::endpoint endpoint(asio::ip::address_v4(
-            network_to_host_long(info.ipv4_))
-            , network_to_host_short(info.port_));
+            network_to_host_long(address.ipv4_))
+            , network_to_host_short(address.port_));
         asio::ip::tcp::socket socket(*io_context_);
         co_await socket.async_connect(endpoint, coro);
         if (ec) { co_return std::nullopt; }
@@ -147,7 +146,7 @@ namespace be
             && (std::memcmp(response.info_hash_.data_, info_hash.data_, sizeof(info_hash.data_)) == 0);
     }
 
-    asio::awaitable<std::optional<PeerId>>
+    asio::awaitable<std::optional<PeerInfo>>
         TorrentPeer::do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id)
     {
         if (!socket_) { co_return std::nullopt; }
@@ -166,7 +165,11 @@ namespace be
         auto parsed = Message_Handshake::Parse(response);
         if (!parsed) { co_return std::nullopt; }
         if (!IsValidHandshakeResponse(*parsed, info_hash)) { co_return std::nullopt; }
-        co_return std::optional<PeerId>(parsed->peer_id_);
+        
+        std::optional<PeerInfo> info(std::in_place);
+        info->peer_id_ = parsed->peer_id_;
+        info->extensions_ = parsed->reserved_;
+        co_return info;
     }
 
 } // namespace be

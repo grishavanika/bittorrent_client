@@ -69,8 +69,8 @@ namespace be
     static bool ParseResponse_Peers(TrackerResponse& response, ElementRef& interval)
     {
         constexpr std::size_t k_packed_peer_size = 4/*ip v4*/ + 2/*port*/;
-        static_assert(sizeof(PeerInfo::ipv4_) == 4);
-        static_assert(sizeof(PeerInfo::port_) == 2);
+        static_assert(sizeof(PeerAddress::ipv4_) == 4);
+        static_assert(sizeof(PeerAddress::port_) == 2);
 
         StringRef* peers_blob = interval.as_string();
         if (!peers_blob || peers_blob->empty())
@@ -91,7 +91,7 @@ namespace be
         const char* const end = current + peers_blob->size();
         while (current != end)
         {
-            PeerInfo& peer = state->peers_.emplace_back(PeerInfo{});
+            PeerAddress& peer = state->peers_.emplace_back(PeerAddress{});
             std::memcpy(&peer.ipv4_, current, sizeof(peer.ipv4_));
             current += sizeof(peer.ipv4_);
             std::memcpy(&peer.port_, current, sizeof(peer.port_));

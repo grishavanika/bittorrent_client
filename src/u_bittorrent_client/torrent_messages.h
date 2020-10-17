@@ -7,6 +7,8 @@
 
 namespace be
 {
+    using ExtensionsBuffer = Buffer<8, struct Extensions_>;
+
     struct Message_Handshake
     {
         static constexpr char k_protocol[] = "BitTorrent protocol";
@@ -14,14 +16,15 @@ namespace be
         static constexpr std::size_t k_size =
               1 // 1 byte 'protocol_length_' = 0x13
             + (sizeof(k_protocol) - 1) // 19 bytes 'pstr_'
-            + 8 // 8 bytes 'reserved_', extensions
+            + sizeof(ExtensionsBuffer) // 8 bytes 'reserved_', extensions
             + sizeof(SHA1Bytes) // 20 bytes of 'info_hash_'
             + sizeof(PeerId); // 20 bytes of 'peer_id_'
         static_assert(k_size == 68);
 
+
         std::uint8_t protocol_length_ = 0;
         const char* pstr_ = nullptr;
-        std::uint8_t reserved_[8]{};
+        ExtensionsBuffer reserved_;
         SHA1Bytes info_hash_;
         PeerId peer_id_;
 

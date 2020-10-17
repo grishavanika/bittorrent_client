@@ -8,7 +8,7 @@
 template<std::size_t N, typename>
 struct Buffer
 {
-    std::uint8_t data_[N];
+    std::uint8_t data_[N]{};
 };
 
 struct SHA1Bytes : Buffer<20, SHA1Bytes> { };
