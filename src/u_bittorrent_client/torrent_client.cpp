@@ -1,4 +1,6 @@
 #include "torrent_client.h"
+#include "utils_http.h"
+
 #include <bencoding/be_torrent_file_parse.h>
 #include <small_utils/utils_read_file.h>
 #include <small_utils/utils_string.h>
@@ -103,4 +105,16 @@ namespace be
         catch (...) { }
         return std::nullopt;
     }
+
+    asio::awaitable<std::optional<be::TrackerResponse>>
+        TorrentClient::request_torrent_peers(asio::io_context& io_context)
+    {
+        auto http = get_tracker_request_info();
+        if (!http) { co_return std::nullopt; }
+        std::optional<std::string> body = co_await HTTP_GET(
+            io_context, http->host_, http->get_uri_, http->port_);
+        if (!body) { co_return std::nullopt; }
+        co_return be::ParseTrackerCompactResponseContent(*body);
+    }
+
 } // namespace be
