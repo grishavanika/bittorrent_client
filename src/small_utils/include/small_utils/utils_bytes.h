@@ -133,7 +133,7 @@ struct BytesReader
         return *this;
     }
 
-    std::size_t available() const
+    std::size_t get_remaining() const
     {
         if (valid_)
         {

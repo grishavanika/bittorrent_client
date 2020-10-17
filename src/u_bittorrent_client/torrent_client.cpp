@@ -24,31 +24,13 @@ namespace be
         return std::string(static_cast<const char*>(data), sizeof(peer.data_));
     }
 
-    /*static*/ std::optional<TorrentClient> TorrentClient::make(
-        const char* torrent_file_path
-        , std::random_device& random)
+    static bool IsValidHandshakeResponse(
+        const Message_Handshake& response
+        , const SHA1Bytes& info_hash)
     {
-        std::optional<TorrentClient> client(std::in_place);
-        {
-            const FileBuffer buffer = ReadAllFileAsBinary(torrent_file_path);
-            if (!buffer.data_)
-            {
-                return std::nullopt;
-            }
-            std::optional<TorrentFileInfo> torrent = ParseTorrentFileContent(AsStringView(buffer));
-            if (!torrent)
-            {
-                return std::nullopt;
-            }
-
-            client->metainfo_ = std::move(torrent->metainfo_);
-            client->info_hash_ = GetSHA1(AsStringView(buffer
-                , torrent->info_position_.start_
-                , torrent->info_position_.end_));
-        }
-
-        client->peer_id_ = GetRandomPeerId(random);
-        return client;
+        return (response.protocol_length_ == SizeNoNull(Message_Handshake::k_protocol))
+            && (std::memcmp(response.pstr_, Message_Handshake::k_protocol, response.protocol_length_) == 0)
+            && (std::memcmp(response.info_hash_.data_, info_hash.data_, sizeof(info_hash.data_)) == 0);
     }
 
     static std::optional<TorrentClient::HTTPTrackerRequest>
@@ -79,6 +61,33 @@ namespace be
         }
         request->get_uri_ += url.query_str();
         return request;
+    }
+
+    /*static*/ std::optional<TorrentClient> TorrentClient::make(
+        const char* torrent_file_path
+        , std::random_device& random)
+    {
+        std::optional<TorrentClient> client(std::in_place);
+        {
+            const FileBuffer buffer = ReadAllFileAsBinary(torrent_file_path);
+            if (!buffer.data_)
+            {
+                return std::nullopt;
+            }
+            std::optional<TorrentFileInfo> torrent = ParseTorrentFileContent(AsStringView(buffer));
+            if (!torrent)
+            {
+                return std::nullopt;
+            }
+
+            client->metainfo_ = std::move(torrent->metainfo_);
+            client->info_hash_ = GetSHA1(AsStringView(buffer
+                , torrent->info_position_.start_
+                , torrent->info_position_.end_));
+        }
+
+        client->peer_id_ = GetRandomPeerId(random);
+        return client;
     }
 
     auto TorrentClient::get_tracker_request_info(
@@ -137,15 +146,6 @@ namespace be
         co_return std::move(socket);
     }
 
-    static bool IsValidHandshakeResponse(
-        const Message_Handshake& response
-        , const SHA1Bytes& info_hash)
-    {
-        return (response.protocol_length_ == SizeNoNull(Message_Handshake::k_protocol))
-            && (std::memcmp(response.pstr_, Message_Handshake::k_protocol, response.protocol_length_) == 0)
-            && (std::memcmp(response.info_hash_.data_, info_hash.data_, sizeof(info_hash.data_)) == 0);
-    }
-
     asio::awaitable<std::optional<PeerInfo>>
         TorrentPeer::do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id)
     {
@@ -162,7 +162,7 @@ namespace be
         (void)co_await asio::async_read(*socket_
             , asio::buffer(response.data_, sizeof(response.data_)), coro);
         if (ec) { co_return std::nullopt; }
-        auto parsed = Message_Handshake::Parse(response);
+        auto parsed = Message_Handshake::ParseNetwork(response);
         if (!parsed) { co_return std::nullopt; }
         if (!IsValidHandshakeResponse(*parsed, info_hash)) { co_return std::nullopt; }
         
