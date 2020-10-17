@@ -44,7 +44,7 @@ inline asio::awaitable<std::optional<std::string>>
     if (ec) { co_return std::nullopt; }
     co_await asio::async_connect(socket, std::move(endpoints), coro);
     if (ec) { co_return std::nullopt; }
-    co_await asio::async_write(socket, request, coro);
+    (void)co_await asio::async_write(socket, request, coro);
     if (ec) { co_return std::nullopt; }
     co_await asio::async_read_until(socket, response, "\r\n", coro);
     if (ec) { co_return std::nullopt; }

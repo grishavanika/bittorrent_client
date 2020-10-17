@@ -5,11 +5,24 @@
 
 #include <asio/io_context.hpp>
 #include <asio/awaitable.hpp>
+#include <asio/ip/tcp.hpp>
 
 #include <optional>
 
 namespace be
 {
+    struct TorrentPeer
+    {
+        asio::awaitable<std::optional<asio::ip::tcp::socket>>
+            do_connect(PeerInfo info);
+        asio::awaitable<std::optional<PeerId>>
+            do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id);
+
+        asio::io_context* io_context_ = nullptr;
+        // std::optional<> to default-construct.
+        std::optional<asio::ip::tcp::socket> socket_;
+    };
+
     struct TorrentClient
     {
         static std::optional<TorrentClient> make(

@@ -17,6 +17,14 @@ inline const char* AsConstData(std::string_view str)
     return &(str[0]);
 }
 
+// To not confuse with std::size("ss") -> 3
+// that takes into account null.
+template<unsigned N>
+inline constexpr std::size_t SizeNoNull(const char (&)[N])
+{
+    return (N - 1);
+}
+
 inline bool ParseLength(std::string_view str, std::uint64_t& length)
 {
 #if (BE_HAS_FROM_CHARS())

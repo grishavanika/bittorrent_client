@@ -1,4 +1,5 @@
 #include "torrent_client.h"
+#include "torrent_messages.h"
 #include "utils_http.h"
 
 #include <bencoding/be_torrent_file_parse.h>
@@ -7,6 +8,8 @@
 #include <small_utils/utils_bytes.h>
 
 #include <url.hpp>
+
+#include <cstring>
 
 namespace be
 {
@@ -115,6 +118,55 @@ namespace be
             io_context, http->host_, http->get_uri_, http->port_);
         if (!body) { co_return std::nullopt; }
         co_return be::ParseTrackerCompactResponseContent(*body);
+    }
+
+    asio::awaitable<std::optional<asio::ip::tcp::socket>>
+        TorrentPeer::do_connect(PeerInfo info)
+    {
+        // network_to_*
+        using namespace asio::detail::socket_ops;
+
+        std::error_code ec;
+        auto coro = asio::redirect_error(asio::use_awaitable, ec);
+
+        const asio::ip::tcp::endpoint endpoint(asio::ip::address_v4(
+            network_to_host_long(info.ipv4_))
+            , network_to_host_short(info.port_));
+        asio::ip::tcp::socket socket(*io_context_);
+        co_await socket.async_connect(endpoint, coro);
+        if (ec) { co_return std::nullopt; }
+        co_return std::move(socket);
+    }
+
+    static bool IsValidHandshakeResponse(
+        const Message_Handshake& response
+        , const SHA1Bytes& info_hash)
+    {
+        return (response.protocol_length_ == SizeNoNull(Message_Handshake::k_protocol))
+            && (std::memcmp(response.pstr_, Message_Handshake::k_protocol, response.protocol_length_) == 0)
+            && (std::memcmp(response.info_hash_.data_, info_hash.data_, sizeof(info_hash.data_)) == 0);
+    }
+
+    asio::awaitable<std::optional<PeerId>>
+        TorrentPeer::do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id)
+    {
+        if (!socket_) { co_return std::nullopt; }
+
+        std::error_code ec;
+        auto coro = asio::redirect_error(asio::use_awaitable, ec);
+
+        const auto handshake = Message_Handshake::SerializeDefault(info_hash, peer_id);
+        (void)co_await asio::async_write(*socket_
+            , asio::buffer(handshake.data_, sizeof(handshake.data_)), coro);
+        if (ec) { co_return std::nullopt; }
+        Message_Handshake::Buffer response;
+        (void)co_await asio::async_read(*socket_
+            , asio::buffer(response.data_, sizeof(response.data_)), coro);
+        if (ec) { co_return std::nullopt; }
+        auto parsed = Message_Handshake::Parse(response);
+        if (!parsed) { co_return std::nullopt; }
+        if (!IsValidHandshakeResponse(*parsed, info_hash)) { co_return std::nullopt; }
+        co_return std::optional<PeerId>(parsed->peer_id_);
     }
 
 } // namespace be

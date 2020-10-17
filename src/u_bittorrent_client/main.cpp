@@ -1,4 +1,5 @@
 #include "torrent_client.h"
+#include "torrent_messages.h"
 
 #include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/be_element_ref_parse.h>
@@ -45,5 +46,46 @@ int main()
     assert(info);
     std::printf("Re-request seconds: %" PRIu64 "\n", info->rerequest_dt_secs_);
     std::printf("Peers count       : %zu\n", info->peers_.size());
+    assert(!info->peers_.empty());
+
+    auto peer_loop = [](
+        be::TorrentPeer& peer
+        , be::PeerInfo peer_info
+        , std::size_t id
+        , const be::TorrentClient& client)
+            -> asio::awaitable<bool>
+    {
+        peer.socket_ = co_await peer.do_connect(peer_info);
+        const std::optional<PeerId> handshake = co_await peer.do_handshake(
+            client.info_hash_, client.peer_id_);
+        co_return bool(handshake);
+    };
+
+    asio::io_context io_context(1);
+    std::vector<be::TorrentPeer> peers;
+    for (const auto& _ : info->peers_)
+    {
+        (void)_;
+        auto& peer = peers.emplace_back(be::TorrentPeer{});
+        peer.io_context_ = &io_context;
+    }
+
+    std::size_t connected = 0;
+    std::size_t failed = 0;
+    for (std::size_t i = 0, count = info->peers_.size(); i < count; ++i)
+    {
+        asio::co_spawn(io_context
+            , peer_loop(peers[i], info->peers_[i], i, *client)
+            , [i, &connected, &failed](std::exception_ptr, bool ok)
+        {
+            if (ok) { ++connected; }
+            else { ++failed; }
+        });
+    }
+
+    io_context.run();
+    std::printf("Connected: %zu/%zu\n", connected, info->peers_.size());
+    std::printf("Failed   : %zu/%zu\n", failed, info->peers_.size());
+
     return 0;
 }
