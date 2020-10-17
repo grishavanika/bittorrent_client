@@ -149,7 +149,7 @@ namespace be
     asio::awaitable<std::optional<PeerInfo>>
         TorrentPeer::do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id)
     {
-        if (!socket_) { co_return std::nullopt; }
+        assert(socket_);
 
         std::error_code ec;
         auto coro = asio::redirect_error(asio::use_awaitable, ec);
@@ -170,6 +170,13 @@ namespace be
         info->peer_id_ = parsed->peer_id_;
         info->extensions_ = parsed->reserved_;
         co_return info;
+    }
+
+    asio::awaitable<std::optional<Message_Bitfield>>
+        TorrentPeer::do_read_bitfield()
+    {
+        assert(socket_);
+        co_return co_await ReadMessage<Message_Bitfield>(*socket_);
     }
 
 } // namespace be

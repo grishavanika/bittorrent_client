@@ -21,16 +21,22 @@ namespace be
 
     struct TorrentPeer
     {
+        // (1)
         asio::awaitable<std::optional<asio::ip::tcp::socket>>
             do_connect(PeerAddress address);
+        // (2)
         asio::awaitable<std::optional<PeerInfo>>
             do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id);
+        // (3)
+        asio::awaitable<std::optional<Message_Bitfield>>
+            do_read_bitfield();
 
         asio::io_context* io_context_ = nullptr;
         // std::optional<> to default-construct.
         std::optional<asio::ip::tcp::socket> socket_;
         // Information about peer that we are connected to.
         std::optional<PeerInfo> info_;
+        std::optional<Message_Bitfield> bitfield_;
     };
 
     struct TorrentClient

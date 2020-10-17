@@ -28,7 +28,9 @@ asio::awaitable<bool> PeerLoop(be::TorrentPeer& peer
     peer.socket_ = co_await peer.do_connect(address);
     peer.info_ = co_await peer.do_handshake(
         client.info_hash_, client.peer_id_);
-    co_return bool(peer.info_);
+    if (!peer.info_) { co_return false; }
+    peer.bitfield_ = co_await peer.do_read_bitfield();
+    co_return bool(peer.bitfield_);
 }
 
 int main()
@@ -85,5 +87,27 @@ int main()
     std::printf("Connected: %zu/%zu\n", connected, info->peers_.size());
     std::printf("Failed   : %zu/%zu\n", failed, info->peers_.size());
 
+    auto how_many_has = [&](std::size_t piece)
+    {
+        std::size_t count = 0;
+        for (const be::TorrentPeer& peer : peers)
+        {
+            if (!peer.bitfield_)
+            {
+                continue;
+            }
+            if (peer.bitfield_->has_piece(piece))
+            {
+                ++count;
+            }
+        }
+        return count;
+    };
+    const std::size_t pieces_count = (client->metainfo_.info_.pieces_SHA1_.size() / sizeof(SHA1Bytes));
+    const std::size_t bitfield_bytes = std::size_t((pieces_count + 0.5) / 8);
+    for (std::size_t i = 0; i < pieces_count; ++i)
+    {
+        printf("Piece %zu has %zu peers\n", i, how_many_has(i));
+    }
     return 0;
 }
