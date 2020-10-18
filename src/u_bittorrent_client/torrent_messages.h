@@ -108,6 +108,16 @@ namespace be
         std::uint32_t piece_index_ = 0;
 
         static std::optional<Message_Have> ParseNetwork(std::vector<std::uint8_t> payload);
+
+        static constexpr std::size_t k_size =
+              sizeof(std::uint32_t)  // 4 bytes, length
+            + sizeof(PeerMessageId)  // 1 byte, id
+            + sizeof(std::uint32_t); // 4 bytes, index
+        static_assert(k_size == 9);
+
+        using Buffer = Buffer<k_size, Message_Have>;
+
+        Buffer serialize() const;
     };
 
     struct Message_Bitfield : Message_Base<Message_Bitfield, PeerMessageId::Bitfield>
@@ -148,6 +158,9 @@ namespace be
         std::size_t data_offset_ = 0;
         std::uint32_t piece_index_ = 0;
         std::uint32_t piece_begin_ = 0;
+
+        std::uint32_t size() const;
+        const void* data() const;
 
         static std::optional<Message_Piece> ParseNetwork(std::vector<std::uint8_t> payload);
     };

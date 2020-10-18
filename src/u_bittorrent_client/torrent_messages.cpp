@@ -11,6 +11,14 @@
 #include <cassert>
 #include <cstdint>
 
+#if defined(ASIO_ENABLE_HANDLER_TRACKING)
+#  define coro(EC) \
+    asio::redirect_error(asio::use_awaitable_t(__FILE__, __LINE__, __FUNCSIG__), ec)
+#else
+#  define coro(EC) \
+    asio::redirect_error(asio::use_awaitable, ec)
+#endif
+
 namespace be
 {
     namespace detail
@@ -137,6 +145,17 @@ namespace be
         return o;
     }
 
+    auto Message_Have::serialize() const -> Buffer
+    {
+        Buffer buffer;
+        BytesWriter::make(buffer.data_)
+            .write(detail::HostToNetworkOrder(k_size))
+            .write(PeerMessageId::Have)
+            .write(detail::HostToNetworkOrder(piece_index_))
+            .finalize();
+        return buffer;
+    }
+
     auto Message_Request::serialize() const -> Buffer
     {
         Buffer buffer;
@@ -176,14 +195,25 @@ namespace be
         return o;
     }
 
+    std::uint32_t Message_Piece::size() const
+    {
+        assert(payload_.size() > data_offset_);
+        return std::uint32_t(payload_.size() - data_offset_);
+    }
+
+    const void* Message_Piece::data() const
+    {
+        assert(data_offset_ < payload_.size());
+        return &payload_[data_offset_];
+    }
+
     asio::awaitable<AnyMessage> ReadAnyMessage(asio::ip::tcp::socket& peer)
     {
         std::error_code ec;
-        auto coro = asio::redirect_error(asio::use_awaitable, ec);
 
         std::uint32_t length = 0;
         (void)co_await asio::async_read(peer
-            , asio::buffer(&length, sizeof(length)), coro);
+            , asio::buffer(&length, sizeof(length)), coro(ec));
         if (ec) { co_return AnyMessage(); }
         length = detail::NetworkToHostOrder(length);
         if (length == 0)
@@ -196,7 +226,7 @@ namespace be
         std::vector<std::uint8_t> data;
         data.resize(length);
         (void)co_await asio::async_read(peer
-            , asio::buffer(&data[0], length), coro);
+            , asio::buffer(&data[0], length), coro(ec));
         if (ec) { co_return AnyMessage(); }
         PeerMessageId message_id{};
         BytesReader::make(&data[0], length).read(message_id);
@@ -227,10 +257,8 @@ namespace be
         }
 
         std::error_code ec;
-        auto coro = asio::redirect_error(asio::use_awaitable, ec);
-
         (void)co_await asio::async_write(peer
-            , asio::buffer(data, size), coro);
+            , asio::buffer(data, size), coro(ec));
         if (ec) { co_return false; }
         co_return true;
     }

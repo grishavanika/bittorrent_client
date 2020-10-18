@@ -94,7 +94,7 @@ namespace be
         std::uint16_t server_port /*= 6882*/) const
             -> std::optional<HTTPTrackerRequest>
     {
-        const std::size_t pieces = (metainfo_.info_.pieces_SHA1_.size() / sizeof(SHA1Bytes));
+        const std::size_t pieces = get_pieces_count();
         const std::size_t uploaded_pieces = 0;
         const std::size_t downloaded_pieces = 0;
         const std::size_t do_compact_response = 1;
@@ -126,6 +126,34 @@ namespace be
             io_context, http->host_, http->get_uri_, http->port_);
         if (!body) { co_return std::nullopt; }
         co_return be::ParseTrackerCompactResponseContent(*body);
+    }
+
+    std::uint32_t TorrentClient::get_pieces_count() const
+    {
+        return std::uint32_t(metainfo_.info_.pieces_SHA1_.size() / sizeof(SHA1Bytes));
+    }
+
+    std::uint64_t TorrentClient::get_total_size_bytes() const
+    {
+        const TorrentMetainfo::LengthOrFiles& data = metainfo_.info_.length_or_files_;
+        assert(data.index() != 0);
+
+        if (const std::uint64_t* single_file = std::get_if<std::uint64_t>(&data))
+        {
+            return *single_file;
+        }
+        std::uint64_t total = 0;
+        const auto& files = std::get<std::vector<TorrentMetainfo::File>>(data);
+        for (const TorrentMetainfo::File& f : files)
+        {
+            total += f.length_bytes_;
+        }
+        return total;
+    }
+
+    std::uint32_t TorrentClient::get_piece_size_bytes() const
+    {
+        return std::uint32_t(metainfo_.info_.piece_length_bytes_);
     }
 
     asio::awaitable<std::optional<asio::ip::tcp::socket>>

@@ -56,6 +56,10 @@ namespace be
         asio::awaitable<std::optional<be::TrackerResponse>>
             request_torrent_peers(asio::io_context& io_context);
 
+        std::uint32_t get_pieces_count() const;
+        std::uint64_t get_total_size_bytes() const;
+        std::uint32_t get_piece_size_bytes() const;
+
     public:
         TorrentMetainfo metainfo_;
         SHA1Bytes info_hash_;
