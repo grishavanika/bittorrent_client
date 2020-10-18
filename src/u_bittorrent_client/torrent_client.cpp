@@ -122,7 +122,7 @@ namespace be
     {
         auto http = get_tracker_request_info();
         if (!http) { co_return std::nullopt; }
-        std::optional<std::string> body = co_await HTTP_GET(
+        auto body = co_await HTTP_GET(
             io_context, http->host_, http->get_uri_, http->port_);
         if (!body) { co_return std::nullopt; }
         co_return be::ParseTrackerCompactResponseContent(*body);
