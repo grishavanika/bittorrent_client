@@ -105,7 +105,7 @@ static std::uint32_t _x_total_pieces_ = 0;
 static std::uint32_t _x_total_peers_ = 0;
 static std::uint32_t _x_active_peers_ = 0;
 
-void NOTIFY_DOWNLOAD(const Pieces::PieceState& piece)
+void NOTIFY_DOWNLOAD(const Pieces& pieces, const Pieces::PieceState& piece)
 {
     _x_downloaded_bytes_ += piece.downloaded_;
     _x_downloaded_pieces_ += 1;
@@ -115,12 +115,14 @@ void NOTIFY_DOWNLOAD(const Pieces::PieceState& piece)
     printf("[%" PRIu32 "][%.2f %%]. "
         "Pieces %" PRIu32 "/%" PRIu32 ". "
         "Bytes %" PRIu64 "/%" PRIu64 ". "
-        "Peers %" PRIu32 "/%" PRIu32 "."
+        "Peers %" PRIu32 "/%" PRIu32 ". "
+        "Retry queue size: %zu."
         "\n"
         , piece.piece_index_, percents
         , _x_downloaded_pieces_, _x_total_pieces_
         , _x_downloaded_bytes_, _x_total_bytes_
-        , _x_active_peers_, _x_total_peers_);
+        , _x_active_peers_, _x_total_peers_
+        , pieces.to_retry_.size());
 }
 
 asio::awaitable<bool> TryDownloadPiecesFromPeer(
@@ -138,6 +140,10 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
             // active to re-schedule the piece.
             co_return false;
         }
+        // Put back to the queue on early out or
+        // coroutine exit.
+        auto retry = folly::makeGuard([piece, &pieces] { pieces.push_piece_to_retry(*piece); });
+
         if (!peer.bitfield_->has_piece(piece->piece_index_))
         {
             // Try another one. Peer has no such a piece.
@@ -242,9 +248,11 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
                 break;
             }
         }
-
+        
         assert(piece->downloaded_ == piece_size);
-        NOTIFY_DOWNLOAD(*piece);
+
+        retry.dismiss();
+        NOTIFY_DOWNLOAD(pieces, *piece);
 
         // # UUU: validate and retry on hash mismatch.
         be::Message_Have have;
