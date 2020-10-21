@@ -1,5 +1,6 @@
 #pragma once
 #include <bencoding/be_element_ref.h>
+#include <bencoding/be_errors.h>
 
 #include <cstdint>
 #include <cstring>
@@ -10,6 +11,11 @@
 
 namespace be
 {
+    struct TorrentFileInfo;
+    // Makes deep copy for the content.
+    // Returned value can outlive passed `content` lifetime.
+    outcome::result<TorrentFileInfo> ParseTorrentFileContent(std::string_view content);
+
     // https://www.bittorrent.org/beps/bep_0003.html
     // .torrent file.
     struct TorrentMetainfo
@@ -59,9 +65,4 @@ namespace be
         // Do SHA1 to get torrent **info_hash**.
         ElementPosition info_position_;
     };
-
-    // Makes deep copy for the content.
-    // #UUU: add error information.
-    std::optional<TorrentFileInfo> ParseTorrentFileContent(std::string_view content);
-
 } // namespace be

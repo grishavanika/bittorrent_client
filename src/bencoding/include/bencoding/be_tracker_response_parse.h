@@ -1,12 +1,18 @@
 #pragma once
+#include <bencoding/be_errors.h>
+
 #include <variant>
-#include <optional>
 #include <vector>
 #include <string>
 #include <cstdint>
 
 namespace be
 {
+    struct TrackerResponse;
+    // https://www.bittorrent.org/beps/bep_0003.html
+    // https://www.bittorrent.org/beps/bep_0023.html
+    outcome::result<TrackerResponse>
+        ParseTrackerCompactResponseContent(std::string_view content);
 
     struct PeerAddress
     {
@@ -32,9 +38,4 @@ namespace be
             , OnSuccess
             , OnError> data_;
     };
-
-    // https://www.bittorrent.org/beps/bep_0003.html
-    // https://www.bittorrent.org/beps/bep_0023.html
-    std::optional<TrackerResponse> ParseTrackerCompactResponseContent(
-        std::string_view content);
 } // namespace be

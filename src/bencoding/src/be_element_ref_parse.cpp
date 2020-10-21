@@ -13,7 +13,7 @@ namespace be
     constexpr char k_element_end      = 'e';
     constexpr char k_string_start     = ':';
 
-    using ParsedElementRef = nonstd::expected<ElementRef, ParseError>;
+    using ParsedElementRef = outcome::result<ElementRef, ParseErrorInfo>;
 
     struct Parser
     {
@@ -57,7 +57,7 @@ namespace be
         {
             if (current_ >= end_)
             {
-                return make_error(parent_id, ParseErrorKind::UnexpectedEnd);
+                return make_error(parent_id, ParseErrorc::UnexpectedEnd);
             }
             switch (*current_)
             {
@@ -74,7 +74,7 @@ namespace be
 
             if (!consume(k_integer_start))
             {
-                return make_error(ElementId::Integer, ParseErrorKind::MissingIntegerStart);
+                return make_error(ElementId::Integer, ParseErrorc::MissingIntegerStart);
             }
             const char* const begin = current_;
             const bool has_sign = (has_data() && (*begin == '-'));
@@ -91,35 +91,35 @@ namespace be
                 }
                 else
                 {
-                    return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                    return make_error(ElementId::Integer, ParseErrorc::BadInteger);
                 }
             }
 
             const char* const last = current_;
             if (!consume(k_element_end))
             {
-                return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                return make_error(ElementId::Integer, ParseErrorc::BadInteger);
             }
 
             if (begin == last)
             {
                 // Missing number's digits: "ie".
-                return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                return make_error(ElementId::Integer, ParseErrorc::BadInteger);
             }
             else if (has_sign && (last == (begin + 1)))
             {
                 // Only `-` was specified: "i-e".
-                return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                return make_error(ElementId::Integer, ParseErrorc::BadInteger);
             }
             else if (has_sign && *(begin + 1) == '0')
             {
                 // "i-0e" case.
-                return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                return make_error(ElementId::Integer, ParseErrorc::BadInteger);
             }
             else if ((*begin == '0') && (last > (begin + 1)))
             {
                 // "i03e" case.
-                return make_error(ElementId::Integer, ParseErrorKind::BadInteger);
+                return make_error(ElementId::Integer, ParseErrorc::BadInteger);
             }
             return IntegerRefBuilder()
                 .set(std::string_view(begin, last - begin))
@@ -132,7 +132,7 @@ namespace be
 
             if (!consume(k_list_start))
             {
-                return make_error(ElementId::String, ParseErrorKind::MissingListStart);
+                return make_error(ElementId::String, ParseErrorc::MissingListStart);
             }
             ListRefBuilder builder;
             while (has_data() && (*current_ != k_element_end))
@@ -142,11 +142,11 @@ namespace be
                 {
                     return element;
                 }
-                builder.add(std::move(*element));
+                builder.add(std::move(element.value()));
             }
             if (!consume(k_element_end))
             {
-                return make_error(ElementId::String, ParseErrorKind::MissingListEnd);
+                return make_error(ElementId::String, ParseErrorc::MissingListEnd);
             }
             return builder.build_once(position.get());
         }
@@ -157,30 +157,22 @@ namespace be
 
             if (!consume(k_dictionary_start))
             {
-                return make_error(ElementId::Dictionary, ParseErrorKind::MissingDictionaryStart);
+                return make_error(ElementId::Dictionary, ParseErrorc::MissingDictionaryStart);
             }
             DictionaryRefBuilder builder;
             while (has_data() && (*current_ != k_element_end))
             {
-                auto key = parse_element(ElementId::Dictionary);
-                if (!key)
+                OUTCOME_TRY(key, parse_element(ElementId::Dictionary));
+                if (!key.as_string())
                 {
-                    return key;
+                    return make_error(ElementId::Dictionary, ParseErrorc::NonStringAsDictionaryKey);
                 }
-                if (!key->as_string())
-                {
-                    return make_error(ElementId::Dictionary, ParseErrorKind::NonStringAsDictionaryKey);
-                }
-                auto value = parse_element(ElementId::Dictionary);
-                if (!value)
-                {
-                    return value;
-                }
-                builder.add(std::move(*key->as_string()), std::move(*value));
+                OUTCOME_TRY(value, parse_element(ElementId::Dictionary));
+                builder.add(std::move(*key.as_string()), std::move(value));
             }
             if (!consume(k_element_end))
             {
-                return make_error(ElementId::Dictionary, ParseErrorKind::MissingDictionaryEnd);
+                return make_error(ElementId::Dictionary, ParseErrorc::MissingDictionaryEnd);
             }
             return builder.build_once(position.get());
         }
@@ -189,23 +181,19 @@ namespace be
         {
             const RememberPosition position(*this);
 
-            auto length_element = parse_string_length();
-            if (!length_element)
-            {
-                return length_element;
-            }
-            assert(length_element->as_integer());
+            OUTCOME_TRY(length_element, parse_string_length());
+            assert(length_element.as_integer());
 
             std::uint64_t length = 0;
-            if (!ParseLength(*length_element->as_integer(), length))
+            if (!ParseLength(*length_element.as_integer(), length))
             {
-                return make_error(ElementId::String, ParseErrorKind::BadStringLength);
+                return make_error(ElementId::String, ParseErrorc::BadStringLength);
             }
 
             const char* const begin = current_;
             if (!consume_n(length))
             {
-                return make_error(ElementId::String, ParseErrorKind::StringOutOfBound);
+                return make_error(ElementId::String, ParseErrorc::StringOutOfBound);
             }
             return StringRefBuilder()
                 .set(std::string_view(begin, std::size_t(length)))
@@ -218,13 +206,13 @@ namespace be
         }
 
     private:
-        ParsedElementRef make_error(ElementId element, ParseErrorKind kind) const
+        ParsedElementRef make_error(ElementId element, ParseErrorc e) const
         {
-            ParseError error;
+            ParseErrorInfo error;
             error.position = (current_ - start_);
             error.element = element;
-            error.kind = kind;
-            return nonstd::make_unexpected(std::move(error));
+            error.ec = e;
+            return outcome::failure(error);
         }
 
         [[nodiscard]] bool consume(char ch)
@@ -265,19 +253,19 @@ namespace be
                 }
                 else
                 {
-                    return make_error(ElementId::String, ParseErrorKind::UnexpectedStringLength);
+                    return make_error(ElementId::String, ParseErrorc::UnexpectedStringLength);
                 }
             }
 
             if (begin == current_)
             {
                 // Missing number's digits: ":str" or empty string "".
-                return make_error(ElementId::String, ParseErrorKind::UnexpectedStringLength);
+                return make_error(ElementId::String, ParseErrorc::UnexpectedStringLength);
             }
 
             if (!consume(k_string_start))
             {
-                return make_error(ElementId::String, ParseErrorKind::MissingStringStart);
+                return make_error(ElementId::String, ParseErrorc::MissingStringStart);
             }
 
             return IntegerRefBuilder()
@@ -298,13 +286,8 @@ namespace be
         ListRef elements;
         do
         {
-            auto element = decoder.parse_element();
-            if (element)
-            {
-                elements.push_back(std::move(*element));
-                continue;
-            }
-            return nonstd::make_unexpected(std::move(element).error());
+            OUTCOME_TRY(element, decoder.parse_element());
+            elements.push_back(std::move(element));
         }
         while (decoder.has_data());
 
@@ -314,49 +297,33 @@ namespace be
     Parsed<StringRef> ParseString(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.parse_string();
-        if (element)
-        {
-            assert(element->as_string());
-            return std::move(*element->as_string());
-        }
-        return nonstd::make_unexpected(element.error());
+        OUTCOME_TRY(element, decoder.parse_string());
+        assert(element.as_string());
+        return std::move(*element.as_string());
     }
 
     Parsed<IntegerRef> ParseInteger(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.parse_integer();
-        if (element)
-        {
-            assert(element->as_integer());
-            return std::move(*element->as_integer());
-        }
-        return nonstd::make_unexpected(element.error());
+        OUTCOME_TRY(element, decoder.parse_integer());
+        assert(element.as_integer());
+        return std::move(*element.as_integer());
     }
 
     Parsed<ListRef> ParseList(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.parse_list();
-        if (element)
-        {
-            assert(element->as_list());
-            return std::move(*element->as_list());
-        }
-        return nonstd::make_unexpected(element.error());
+        OUTCOME_TRY(element, decoder.parse_list());
+        assert(element.as_list());
+        return std::move(*element.as_list());
     }
 
     Parsed<DictionaryRef> ParseDictionary(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        auto element = decoder.parse_dictionary();
-        if (element)
-        {
-            assert(element->as_dictionary());
-            return std::move(*element->as_dictionary());
-        }
-        return nonstd::make_unexpected(element.error());
+        OUTCOME_TRY(element, decoder.parse_dictionary());
+        assert(element.as_dictionary());
+        return std::move(*element.as_dictionary());
     }
 
 } // namespace be

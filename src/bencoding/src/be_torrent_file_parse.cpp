@@ -10,17 +10,16 @@ namespace be
     struct KeyParser
     {
         const char* key_;
-        bool (*parse_)(TorrentMetainfo& metainfo, ElementRef& element);
+        outcome::result<void> (*parse_)(TorrentMetainfo& metainfo, ElementRef& element);
         bool parsed_;
         ElementPosition* position_;
     };
 
     template<unsigned N>
-    static bool InvokeParser(TorrentMetainfo& metainfo
+    static outcome::result<void> InvokeParser(TorrentMetainfo& metainfo
         , KeyParser (&parsers)[N]
         , std::string_view key
-        , ElementRef& value
-        , bool& ok)
+        , ElementRef& value)
     {
         for (KeyParser& state : parsers)
         {
@@ -29,17 +28,17 @@ namespace be
                 continue;
             }
             state.parsed_ = true;
-            ok = state.parse_(metainfo, value);
+            auto result = state.parse_(metainfo, value);
             if (state.position_)
             {
                 *state.position_ = value.position();
             }
-            return true;
+            return result;
         }
-        return false;
+        return outcome::failure(ParseTorrentErrorc::Impl_NoKeyFound);
     }
 
-    static bool ParseAnnounce(TorrentMetainfo& metainfo, ElementRef& announce)
+    static outcome::result<void> ParseAnnounce(TorrentMetainfo& metainfo, ElementRef& announce)
     {
         if (StringRef* str = announce.as_string())
         {
@@ -47,13 +46,14 @@ namespace be
             {
                 metainfo.tracker_url_utf8_.assign(
                     AsConstData(*str), str->size());
-                return true;
+                return outcome::success();
             }
+            return outcome::failure(ParseTorrentErrorc::EmptyAnnounce);
         }
-        return false;
+        return outcome::failure(ParseTorrentErrorc::InvalidAnnounceType);
     }
 
-    static bool ParseInfo_Name(TorrentMetainfo& metainfo, ElementRef& name)
+    static outcome::result<void> ParseInfo_Name(TorrentMetainfo& metainfo, ElementRef& name)
     {
         if (StringRef* str = name.as_string())
         {
@@ -63,75 +63,75 @@ namespace be
                 metainfo.info_.suggested_name_utf8_.assign(
                     AsConstData(*str), str->size());
             }
-            return true;
+            return outcome::success();
         }
-        return false;
+        return outcome::failure(ParseTorrentErrorc::InvalidInfoNameType);
     }
 
-    static bool ParseInfo_PieceLength(TorrentMetainfo& metainfo, ElementRef& piece_length)
+    static outcome::result<void> ParseInfo_PieceLength(TorrentMetainfo& metainfo, ElementRef& piece_length)
     {
         IntegerRef* n = piece_length.as_integer();
         if (!n)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoPieceLengthType);
         }
 
         std::uint64_t length_bytes = 0;
         if (!ParseLength(*n, length_bytes))
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoPieceLengthValue);
         }
         metainfo.info_.piece_length_bytes_ = length_bytes;
-        return true;
+        return outcome::success();
     }
 
-    static bool ParseInfo_Pieces(TorrentMetainfo& metainfo, ElementRef& pieces)
+    static outcome::result<void> ParseInfo_Pieces(TorrentMetainfo& metainfo, ElementRef& pieces)
     {
         const std::size_t k_SHA1_length = 20;
 
         StringRef* hashes = pieces.as_string();
         if (!hashes)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoPiecesType);
         }
         const std::size_t size = hashes->size();
         if (size == 0)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::EmptyInfoPieces);
         }
         if ((size % k_SHA1_length) != 0)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoPiecesLength20);
         }
         metainfo.info_.pieces_SHA1_.resize(hashes->size());
         std::memcpy(&metainfo.info_.pieces_SHA1_[0]
             , AsConstData(*hashes), hashes->size());
         metainfo.info_.pieces_SHA1_.shrink_to_fit();
-        return true;
+        return outcome::success();
     }
 
-    static bool ParseInfo_Length(TorrentMetainfo& metainfo, ElementRef& length)
+    static outcome::result<void> ParseInfo_Length(TorrentMetainfo& metainfo, ElementRef& length)
     {
         if (metainfo.info_.length_or_files_.index() != 0)
         {
             // 'files' already placed/parsed.
             // Only 'length' or 'files' can exist, not both.
-            return false;
+            return outcome::failure(ParseTorrentErrorc::AmbiguousMultiOrSingleTorrent);
         }
 
         IntegerRef* n = length.as_integer();
         if (!n)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoLengthType);
         }
         std::uint64_t length_bytes = 0;
         if (!ParseLength(*n, length_bytes))
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoLengthValue);
         }
 
         metainfo.info_.length_or_files_.emplace<1>(length_bytes);
-        return true;
+        return outcome::success();
     }
 
     static std::string JoinUTF8PartsToString(const ListRef& parts, std::size_t total_length)
@@ -160,23 +160,23 @@ namespace be
         return path;
     }
 
-    static std::optional<TorrentMetainfo::File> ParseInfo_FilesFile(ElementRef& length, ElementRef& path)
+    static outcome::result<TorrentMetainfo::File> ParseInfo_FilesFile(ElementRef& length, ElementRef& path)
     {
         IntegerRef* n = length.as_integer();
         ListRef* path_parts = path.as_list();
         if (!n || !path_parts)
         {
-            return std::nullopt;
+            return outcome::failure(ParseTorrentErrorc::TODO);
         }
         if (path_parts->empty())
         {
-            return std::nullopt;
+            return outcome::failure(ParseTorrentErrorc::TODO);
         }
 
         std::uint64_t length_bytes = 0;
         if (!ParseLength(*n, length_bytes))
         {
-            return std::nullopt;
+            return outcome::failure(ParseTorrentErrorc::TODO);
         }
 
         // Validate that path is actually array of non-empty strings.
@@ -186,7 +186,7 @@ namespace be
             const StringRef* name = part.as_string();
             if (!name || name->empty())
             {
-                return std::nullopt;
+                return outcome::failure(ParseTorrentErrorc::TODO);
             }
             total_length += name->length();
         }
@@ -194,29 +194,30 @@ namespace be
         TorrentMetainfo::File file;
         file.length_bytes_ = length_bytes;
         file.path_utf8_ = JoinUTF8PartsToString(*path_parts, total_length);
-        return std::move(file);
+        return outcome::success(std::move(file));
     }
 
-    static bool ParseInfo_Files(TorrentMetainfo& metainfo, ElementRef& files_)
+    static outcome::result<void> ParseInfo_Files(TorrentMetainfo& metainfo, ElementRef& files_)
     {
         if (metainfo.info_.length_or_files_.index() != 0)
         {
             // 'length' already placed/parsed.
             // Only 'length' or 'files' can exist, not both.
-            return false;
+            return outcome::failure(ParseTorrentErrorc::AmbiguousMultiOrSingleTorrent);
         }
         ListRef* list = files_.as_list();
         if (!list)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::TODO);
         }
 
-        auto parse_file = [](ElementRef& e) -> std::optional<TorrentMetainfo::File>
+        auto parse_file = [](ElementRef& e)
+            -> outcome::result<TorrentMetainfo::File>
         {
             DictionaryRef* data = e.as_dictionary();
             if (!data)
             {
-                return std::nullopt;
+                return outcome::failure(ParseTorrentErrorc::TODO);
             }
 
             ElementRef* length = nullptr;
@@ -234,7 +235,7 @@ namespace be
             }
             if (!length || !path)
             {
-                return std::nullopt;
+                return outcome::failure(ParseTorrentErrorc::TODO);
             }
             return ParseInfo_FilesFile(*length, *path);
         };
@@ -242,32 +243,26 @@ namespace be
         std::vector<TorrentMetainfo::File> files;
         for (ElementRef& e : *list)
         {
-            if (std::optional<TorrentMetainfo::File> file = parse_file(e))
-            {
-                files.push_back(std::move(*file));
-            }
-            else
-            {
-                return false;
-            }
+            OUTCOME_TRY(file, parse_file(e));
+            files.push_back(std::move(file));
         }
 
         if (files.empty())
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::TODO);
         }
 
         files.shrink_to_fit();
         metainfo.info_.length_or_files_.emplace<2>(std::move(files));
-        return true;
+        return outcome::success();
     }
 
-    static bool ParseInfo(TorrentMetainfo& metainfo, ElementRef& info)
+    static outcome::result<void> ParseInfo(TorrentMetainfo& metainfo, ElementRef& info)
     {
         DictionaryRef* data = info.as_dictionary();
         if (!data)
         {
-            return false;
+            return outcome::failure(ParseTorrentErrorc::InvalidInfoKeyType);
         }
 
         KeyParser k_parsers[] =
@@ -281,12 +276,18 @@ namespace be
 
         for (auto& [name, element] : *data)
         {
-            bool ok = false;
-            if (InvokeParser(metainfo, k_parsers, name, element, ok)
-                && !ok)
+            auto result = InvokeParser(metainfo, k_parsers, name, element);
+            if (result)
             {
-                return false;
+                continue;
             }
+            if (result.error() == ParseTorrentErrorc::Impl_NoKeyFound)
+            {
+                // That's fine. Some of the keys are optional.
+                // Final object's invariant will be validated at the end.
+                continue;
+            }
+            return result;
         }
 
         if ((metainfo.tracker_url_utf8_.size() > 0)
@@ -296,19 +297,15 @@ namespace be
             // either 'length' or 'files' should be in place.
             && (metainfo.info_.length_or_files_.index() != 0))
         {
-            return true;
+            return outcome::success();
         }
 
-        return true;
+        return outcome::failure(ParseTorrentErrorc::InvalidInvariant);
     }
 
-    std::optional<TorrentFileInfo> ParseTorrentFileContent(std::string_view content)
+    outcome::result<TorrentFileInfo> ParseTorrentFileContent(std::string_view content)
     {
-        Parsed<DictionaryRef> data = ParseDictionary(content);
-        if (!data.has_value())
-        {
-            return std::nullopt;
-        }
+        OUTCOME_TRY(data, ParseDictionary(content));
 
         ElementPosition info_position;
         KeyParser k_parsers[] =
@@ -318,27 +315,31 @@ namespace be
         };
 
         TorrentMetainfo metainfo;
-        for (auto& [name, element] : data.value())
+        for (auto& [name, element] : data)
         {
-            bool ok = false;
-            if (InvokeParser(metainfo, k_parsers, name, element, ok)
-                && !ok)
+            auto result = InvokeParser(metainfo, k_parsers, name, element);
+            if (result)
             {
-                return std::nullopt;
+                continue;
             }
+            if (result.error() == ParseTorrentErrorc::Impl_NoKeyFound)
+            {
+                continue;
+            }
+            return outcome::failure(result.error());
         }
 
         for (const auto& state : k_parsers)
         {
             if (!state.parsed_)
             {
-                return std::nullopt;
+                return outcome::failure(ParseTorrentErrorc::TODO);
             }
         }
 
         TorrentFileInfo info;
         info.metainfo_ = std::move(metainfo);
         info.info_position_ = info_position;
-        return std::move(info);
+        return outcome::success(std::move(info));
     }
 } // namespace be

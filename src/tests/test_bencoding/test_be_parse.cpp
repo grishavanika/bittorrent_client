@@ -49,44 +49,44 @@ TEST(ElementRefParse, Empty_String_Is_UnexpectedEnd_Error)
 {
     auto Parsed = be::Parse("");
     ASSERT_FALSE(Parsed);
-    const ParseError& error = Parsed.error();
+    const ParseErrorInfo& error = Parsed.error();
     ASSERT_EQ(0u, error.position);
     ASSERT_EQ(ElementId::None, error.element);
-    ASSERT_EQ(error.kind, ParseErrorKind::UnexpectedEnd);
+    ASSERT_EQ(error.ec, ParseErrorc::UnexpectedEnd);
 }
 
 TEST(ElementRefParse, ZeroString_IsValid)
 {
     auto Parsed = be::ParseString("0:");
     ASSERT_TRUE(Parsed);
-    ASSERT_EQ(std::string_view(), *Parsed);
+    ASSERT_EQ(std::string_view(), Parsed.value());
 }
 
 TEST(ElementRefParse, String_Is_NonNegative_Number_Sepatated_With_Colon)
 {
     auto Parsed = be::ParseString("3:str");
     ASSERT_TRUE(Parsed);
-    ASSERT_EQ(std::string_view("str"), *Parsed);
+    ASSERT_EQ(std::string_view("str"), Parsed.value());
 }
 
 TEST(ElementRefParse, Too_Long_String_Fails_With_OutOfBound_Error)
 {
     auto Parsed = be::ParseString("10:s");
     ASSERT_FALSE(Parsed);
-    const ParseError& error = Parsed.error();
+    const ParseErrorInfo& error = Parsed.error();
     ASSERT_GT(error.position, 0u);
     ASSERT_EQ(ElementId::String, error.element);
-    ASSERT_EQ(error.kind, ParseErrorKind::StringOutOfBound);
+    ASSERT_EQ(error.ec, ParseErrorc::StringOutOfBound);
 }
 
 TEST(ElementRefParse, Missing_Colon_For_String_Fails)
 {
     auto Parsed = be::Parse("10");
     ASSERT_FALSE(Parsed);
-    const ParseError& error = Parsed.error();
+    const ParseErrorInfo& error = Parsed.error();
     ASSERT_GT(error.position, 0u);
     ASSERT_EQ(ElementId::String, error.element);
-    ASSERT_EQ(error.kind, ParseErrorKind::MissingStringStart);
+    ASSERT_EQ(error.ec, ParseErrorc::MissingStringStart);
 }
 
 TEST(ElementRefParse, Strings_List)
@@ -98,7 +98,7 @@ TEST(ElementRefParse, Strings_List)
         .build_once();
     ASSERT_TRUE(Parsed);
 
-    ASSERT_EQ(expected, *Parsed);
+    ASSERT_EQ(expected, Parsed.value());
 }
 
 TEST(ElementRefParse, Strings_Dictionary)
@@ -110,7 +110,7 @@ TEST(ElementRefParse, Strings_Dictionary)
         .add("spam", "eggs")
         .build_once();
 
-    ASSERT_EQ(expected, *Parsed);
+    ASSERT_EQ(expected, Parsed.value());
 }
 
 TEST(ElementRefParse, Dictionary_With_List_Value)
@@ -126,7 +126,7 @@ TEST(ElementRefParse, Dictionary_With_List_Value)
             .build_once({})
             .as_dictionary();
 
-    ASSERT_EQ(expected, *Parsed);
+    ASSERT_EQ(expected, Parsed.value());
 }
 
 TEST(ElementRefParse, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zeroes)
@@ -134,21 +134,21 @@ TEST(ElementRefParse, Integers_With_Unary_Minus_Parsed_Only_Without_Leading_Zero
     {
         auto Parsed = be::ParseInteger("i-0e");
         ASSERT_FALSE(Parsed);
-        ASSERT_EQ(ParseErrorKind::BadInteger, Parsed.error().kind);
+        ASSERT_EQ(ParseErrorc::BadInteger, Parsed.error().ec);
         ASSERT_EQ(ElementId::Integer, Parsed.error().element);
     }
 
     {
         auto Parsed = be::ParseInteger("i-e");
         ASSERT_FALSE(Parsed);
-        ASSERT_EQ(ParseErrorKind::BadInteger, Parsed.error().kind);
+        ASSERT_EQ(ParseErrorc::BadInteger, Parsed.error().ec);
         ASSERT_EQ(ElementId::Integer, Parsed.error().element);
     }
 
     {
         auto Parsed = be::ParseInteger("i-00000e");
         ASSERT_FALSE(Parsed);
-        ASSERT_EQ(ParseErrorKind::BadInteger, Parsed.error().kind);
+        ASSERT_EQ(ParseErrorc::BadInteger, Parsed.error().ec);
         ASSERT_EQ(ElementId::Integer, Parsed.error().element);
     }
 }
@@ -158,13 +158,13 @@ TEST(ElementRefParse, Only_Single_Zero_Integers_Are_Parsed)
     {
         auto Parsed = be::ParseInteger("i0e");
         ASSERT_TRUE(Parsed);
-        ASSERT_EQ(std::string_view("0"), *Parsed);
+        ASSERT_EQ(std::string_view("0"), Parsed.value());
     }
 
     {
         auto Parsed = be::ParseInteger("i00e");
         ASSERT_FALSE(Parsed);
-        ASSERT_EQ(ParseErrorKind::BadInteger, Parsed.error().kind);
+        ASSERT_EQ(ParseErrorc::BadInteger, Parsed.error().ec);
         ASSERT_EQ(ElementId::Integer, Parsed.error().element);
     }
 }
@@ -186,7 +186,7 @@ TEST(ElementRefParse, Only_Negative_Integers_Parsed)
         auto encoded = encode(integer);
         auto Parsed = be::ParseInteger(encoded);
         ASSERT_TRUE(Parsed);
-        ASSERT_EQ(std::string_view(integer), *Parsed);
+        ASSERT_EQ(std::string_view(integer), Parsed.value());
     }
 }
 

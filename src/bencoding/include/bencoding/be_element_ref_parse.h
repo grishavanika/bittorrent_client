@@ -1,35 +1,36 @@
 #pragma once
 #include <bencoding/be_element_ref.h>
+#include <bencoding/be_errors.h>
+
+// For outcome_throw_as_system_error_with_payload().
+#include <cassert>
+#include <cstdlib>
 
 namespace be
 {
-    enum class ParseErrorKind
+    struct ParseErrorInfo
     {
-        Unknown,
-        UnexpectedEnd,
-        UnexpectedStringLength,
-        BadInteger,
-        BadStringLength,
-        StringOutOfBound,
-        NonStringAsDictionaryKey,
-        MissingListStart,
-        MissingListEnd,
-        MissingDictionaryStart,
-        MissingDictionaryEnd,
-        MissingIntegerStart,
-        MissingIntegerEnd,
-        MissingStringStart,
-    };
-
-    struct ParseError
-    {
+        std::error_code ec;
         std::size_t position = 0u;
         ElementId element = ElementId::None;
-        ParseErrorKind kind = ParseErrorKind::Unknown;
     };
+    
+    // From:
+    // https://ned14.github.io/outcome/tutorial/advanced/payload/copy_file2/.
+    // Tell Outcome that ParseErrorInfo is to be treated as a std::error_code.
+    inline const std::error_code& make_error_code(const ParseErrorInfo& ei)
+    {
+        return ei.ec;
+    }
+
+    [[noreturn]] inline void outcome_throw_as_system_error_with_payload(ParseErrorInfo ei)
+    {
+        (void)ei; assert(false);
+        std::abort();
+    }
 
     template<typename T>
-    using Parsed = nonstd::expected<T, ParseError>;
+    using Parsed = outcome::result<T, ParseErrorInfo>;
 
     Parsed<ListRef>       Parse(std::string_view bencoded);
     Parsed<StringRef>     ParseString(std::string_view bencoded);

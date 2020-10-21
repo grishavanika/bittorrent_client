@@ -74,16 +74,16 @@ namespace be
             {
                 return std::nullopt;
             }
-            std::optional<TorrentFileInfo> torrent = ParseTorrentFileContent(AsStringView(buffer));
+            auto torrent = ParseTorrentFileContent(AsStringView(buffer));
             if (!torrent)
             {
                 return std::nullopt;
             }
 
-            client->metainfo_ = std::move(torrent->metainfo_);
+            client->metainfo_ = std::move(torrent.value().metainfo_);
             client->info_hash_ = GetSHA1(AsStringView(buffer
-                , torrent->info_position_.start_
-                , torrent->info_position_.end_));
+                , torrent.value().info_position_.start_
+                , torrent.value().info_position_.end_));
         }
 
         client->peer_id_ = GetRandomPeerId(random);
@@ -125,7 +125,9 @@ namespace be
         std::optional<std::string> body = co_await HTTP_GET(
             io_context, http->host_, http->get_uri_, http->port_);
         if (!body) { co_return std::nullopt; }
-        co_return be::ParseTrackerCompactResponseContent(*body);
+        auto r = be::ParseTrackerCompactResponseContent(*body);
+        if (!r) { co_return std::nullopt; }
+        co_return r.value();
     }
 
     std::uint32_t TorrentClient::get_pieces_count() const
