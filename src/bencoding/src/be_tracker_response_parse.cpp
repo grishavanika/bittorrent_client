@@ -1,12 +1,17 @@
 #include <bencoding/be_tracker_response_parse.h>
 #include <bencoding/be_element_ref_parse.h>
 #include <bencoding/be_errors.h>
+#include <bencoding/be_parse_utils.h>
 #include <small_utils/utils_string.h>
 
 #include <cstring>
 
 namespace be
 {
+    constexpr std::size_t k_packed_peer_size = 4/*ip v4*/ + 2/*port*/;
+    static_assert(sizeof(PeerAddress::ipv4_) == 4);
+    static_assert(sizeof(PeerAddress::port_) == 2);
+
     struct KeyParser
     {
         const char* const key_;
@@ -15,7 +20,7 @@ namespace be
     };
 
     template<unsigned N>
-    static outcome::result<void> InvokeParser(TrackerResponse& response
+    static outcome::result<void> InvokeParserOptionalKey(TrackerResponse& response
         , KeyParser(&parsers)[N]
         , std::string_view key
         , ElementRef& value)
@@ -29,62 +34,41 @@ namespace be
             state.parsed_ = true;
             return state.parse_(response, value);
         }
-        return outcome::failure(ParseTrackerErrorc::Impl_NoKeyFound);
+        return outcome::success();
     }
 
     template<typename T>
-    static T* GetOrCreateOnly(TrackerResponse& response)
+    static outcome::result<T*> GetOrCreateOnly(TrackerResponse& response)
     {
         if (T* data = std::get_if<T>(&response.data_))
         {
-            return data;
+            return outcome::success(data);
         }
-        if (response.data_.index() != 0) // std::monostate
+        if (auto data = std::get_if<std::monostate>(&response.data_))
         {
-            return nullptr;
+            // Nothing yet constructed.
+            return outcome::success(&response.data_.emplace<T>());
         }
-        return &response.data_.emplace<T>();
+        return outcome::failure(ParseErrorc::Impl_InvalidInvariant);
     }
 
     static outcome::result<void> ParseResponse_Interval(TrackerResponse& response, ElementRef& interval)
     {
-        IntegerRef* n = interval.as_integer();
-        if (!n)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
-        auto state = GetOrCreateOnly<TrackerResponse::OnSuccess>(response);
-        if (!state)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
-        if (!ParseLength(*n, state->rerequest_dt_secs_))
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
+        OUTCOME_TRY(n, be::ElementRefAs<IntegerRef>(interval));
+        OUTCOME_TRY(v, ParseAsUint64(*n));
+        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
+        state->rerequest_dt_secs_ = v;
         return outcome::success();
     }
 
     static outcome::result<void> ParseResponse_Peers(TrackerResponse& response, ElementRef& interval)
     {
-        constexpr std::size_t k_packed_peer_size = 4/*ip v4*/ + 2/*port*/;
-        static_assert(sizeof(PeerAddress::ipv4_) == 4);
-        static_assert(sizeof(PeerAddress::port_) == 2);
-
-        StringRef* peers_blob = interval.as_string();
-        if (!peers_blob || peers_blob->empty())
+        OUTCOME_TRY(peers_blob, be::ElementRefAs<StringRef>(interval));
+        if (peers_blob->empty() || ((peers_blob->size() % k_packed_peer_size) != 0))
         {
-            return outcome::failure(ParseTrackerErrorc::TODO);
+            return outcome::failure(ParseErrorc::InvalidPeersBlobLength);
         }
-        if ((peers_blob->size() % k_packed_peer_size) != 0)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
-        auto state = GetOrCreateOnly<TrackerResponse::OnSuccess>(response);
-        if (!state)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
+        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
         state->peers_.reserve(peers_blob->size() / k_packed_peer_size);
         const char* current = AsConstData(*peers_blob);
         const char* const end = current + peers_blob->size();
@@ -101,16 +85,8 @@ namespace be
 
     static outcome::result<void> ParseResponse_Failure(TrackerResponse& response, ElementRef& failure)
     {
-        StringRef* str = failure.as_string();
-        if (!str)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
-        auto state = GetOrCreateOnly<TrackerResponse::OnError>(response);
-        if (!state)
-        {
-            return outcome::failure(ParseTrackerErrorc::TODO);
-        }
+        OUTCOME_TRY(str, be::ElementRefAs<StringRef>(failure));
+        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnError>(response));
         if (!str->empty())
         {
             state->error_.assign(AsConstData(*str), str->size());
@@ -133,23 +109,12 @@ namespace be
         TrackerResponse response;
         for (auto& [name, element] : data)
         {
-            auto result = InvokeParser(response, k_parsers, name, element);
-            if (result)
-            {
-                continue;
-            }
-            if (result.error() == ParseTrackerErrorc::Impl_NoKeyFound)
-            {
-                // That's fine. Some of the keys are optional.
-                // Final object's invariant will be validated at the end.
-                continue;
-            }
-            return outcome::failure(result.error());
+            OUTCOME_TRY(InvokeParserOptionalKey(response, k_parsers, name, element));
         }
 
         if (response.data_.index() == 0)
         {
-            return outcome::failure(ParseTrackerErrorc::TODO);
+            return outcome::failure(ParseErrorc::MissingRequiredProperty);
         }
         return response;
     }

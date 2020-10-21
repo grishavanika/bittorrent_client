@@ -1,4 +1,6 @@
 #pragma once
+#include <bencoding/be_errors.h>
+
 #include <variant>
 #include <string_view>
 #include <map>
@@ -20,11 +22,33 @@ namespace be
     };
 
     class ElementRef;
-    using IntegerRef     = std::string_view;
-    using StringRef      = std::string_view;
+    struct IntegerRef;
+    struct StringRef;
     using ListRef        = std::vector<ElementRef>;
     using DictionaryRef  = std::vector<std::pair<StringRef, ElementRef>>;
     using StorageRef     = std::variant<IntegerRef, StringRef, ListRef, DictionaryRef>;
+
+    struct IntegerRef : std::string_view
+    {
+        using std::string_view::string_view;
+        static IntegerRef Make(std::string_view&& s)
+        {
+            IntegerRef self;
+            static_cast<std::string_view&>(self) = std::move(s);
+            return self;
+        }
+    };
+
+    struct StringRef : std::string_view
+    {
+        using std::string_view::string_view;
+        static StringRef Make(std::string_view&& s)
+        {
+            StringRef self;
+            static_cast<std::string_view&>(self) = std::move(s);
+            return self;
+        }
+    };
 
     // Index of ElementId in `StorageRef` variant.
     constexpr std::size_t ElementIdToIndex(ElementId id) noexcept
@@ -148,5 +172,4 @@ namespace be
     {
         return !(lhs == rhs);
     }
-
 } // namespace be

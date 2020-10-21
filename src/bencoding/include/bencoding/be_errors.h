@@ -6,30 +6,16 @@ namespace outcome = OUTCOME_V2_NAMESPACE;
 
 namespace be
 {
-    // #UUU: instead of 3 different error enums,
-    // one error list should be used with std::error_condition
-    // implementation.
-    // IFF we decide those 3 parts should be in one library.
+    // #UUU: add std::error_condition to differentiate
+    // between categories we have.
     enum class ParseErrorc : int;
     std::error_code make_error_code(ParseErrorc);
-
-    enum class ParseTorrentErrorc : int;
-    std::error_code make_error_code(ParseTorrentErrorc);
-
-    enum class ParseTrackerErrorc : int;
-    std::error_code make_error_code(ParseTrackerErrorc);
 } // namespace be
 
 namespace std
 {
     template <>
     struct is_error_code_enum<be::ParseErrorc> : true_type {};
-
-    template <>
-    struct is_error_code_enum<be::ParseTorrentErrorc> : true_type {};
-
-    template <>
-    struct is_error_code_enum<be::ParseTrackerErrorc> : true_type {};
 } // namespace std
 
 namespace be
@@ -37,7 +23,7 @@ namespace be
     enum class ParseErrorc : int
     {
         Ok = 0,
-        UnexpectedEnd,
+        UnexpectedEnd = 100, // BE format parsing errors.
         UnexpectedStringLength,
         BadInteger,
         BadStringLength,
@@ -50,32 +36,23 @@ namespace be
         MissingIntegerStart,
         MissingIntegerEnd,
         MissingStringStart,
-    };
+        NotString,
+        NotInteger,
+        NotDictionary,
+        NotList,
+        InvalidInteger,
 
-    enum class ParseTorrentErrorc : int
-    {
-        Ok = 0,
-        Impl_NoKeyFound,
-        TODO,
-        InvalidInfoKeyType,
-        InvalidInvariant,
+        InvalidInvariant = 200, // .torrent file parsing errors.
         EmptyAnnounce,
-        InvalidAnnounceType,
-        InvalidInfoNameType,
-        InvalidInfoPieceLengthType,
-        InvalidInfoPieceLengthValue,
-        InvalidInfoPiecesType,
-        EmptyInfoPieces,
         InvalidInfoPiecesLength20,
         AmbiguousMultiOrSingleTorrent,
-        InvalidInfoLengthType,
-        InvalidInfoLengthValue,
-    };
+        EmptyMultiFileName,
+        MissingMultiFileProperty,
+        EmptyMultiFile,
+        MissingInfoProperty,
 
-    enum class ParseTrackerErrorc : int
-    {
-        Ok = 0,
-        Impl_NoKeyFound,
-        TODO,
+        Impl_InvalidInvariant = 300, // Tracker response parsing errors.
+        InvalidPeersBlobLength,
+        MissingRequiredProperty,
     };
 } // namespace be

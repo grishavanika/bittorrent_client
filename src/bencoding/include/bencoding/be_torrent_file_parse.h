@@ -7,7 +7,6 @@
 #include <string_view>
 #include <string>
 #include <variant>
-#include <optional>
 
 namespace be
 {

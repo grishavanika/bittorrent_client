@@ -31,7 +31,7 @@ namespace
         StringsDictionaryRefBuilder& add(std::string_view key,
             std::string_view value)
         {
-            dict_.add(std::move(key), StringRefBuilder().set(value).build_once({}));
+            dict_.add(StringRef::Make(std::move(key)), StringRefBuilder().set(value).build_once({}));
             return *this;
         }
 

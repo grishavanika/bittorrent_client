@@ -49,7 +49,7 @@ namespace be
     public:
         IntegerRefBuilder& set(std::string_view number)
         {
-            number_ = std::move(number);
+            number_ = IntegerRef::Make(std::move(number));
             return *this;
         }
 
@@ -68,7 +68,7 @@ namespace be
     public:
         StringRefBuilder& set(std::string_view str)
         {
-            str_ = std::move(str);
+            str_ = StringRef::Make(std::move(str));
             return *this;
         }
 
