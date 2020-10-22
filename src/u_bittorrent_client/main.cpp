@@ -286,13 +286,12 @@ int main()
 {
     const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
     std::random_device random;
-    auto client = be::TorrentClient::make(torrent_file, random);
-    assert(client);
+    auto client = be::TorrentClient::make(torrent_file, random).value();
 
-    { // Validate a bit.
-        const std::uint32_t pieces_count = client->get_pieces_count();
-        const std::uint32_t piece_size = client->get_piece_size_bytes();
-        const std::uint64_t total_size = client->get_total_size_bytes();
+    { // Validate size & pieces count & piece size.
+        const std::uint32_t pieces_count = client.get_pieces_count();
+        const std::uint32_t piece_size = client.get_piece_size_bytes();
+        const std::uint64_t total_size = client.get_total_size_bytes();
         assert(pieces_count > 0);
         assert(piece_size > 0);
         const std::uint64_t size_except_last_piece = (std::uint64_t(piece_size) * std::uint64_t((pieces_count - 1)));
@@ -301,52 +300,54 @@ int main()
         assert(last <= std::uint64_t(piece_size));
     }
 
-    std::optional<be::TrackerResponse> data;
+    be::TrackerResponse tracker;
 
-    {
+    { // Get the info from the tracker first.
         asio::io_context io_context(1);
         asio::co_spawn(io_context
-            , client->request_torrent_peers(io_context)
-            , [&data](std::exception_ptr, std::optional<be::TrackerResponse> response)
+            , [&]() -> asio::awaitable<void>
             {
-                data = std::move(response);
-            });
+                auto data = co_await client.request_torrent_peers(io_context);
+                assert(data);
+                tracker = std::move(data.value());
+                co_return;
+            }
+            , asio::detached);
 
         io_context.run();
     }
 
-    assert(data);
-    auto info = std::get_if<be::TrackerResponse::OnSuccess>(&data->data_);
-    assert(info);
-    std::printf("Re-request seconds: %" PRIu64 "\n", info->rerequest_dt_secs_);
-    std::printf("Peers count       : %zu\n", info->peers_.size());
-    assert(!info->peers_.empty());
+    auto tracker_info = std::get_if<be::TrackerResponse::OnSuccess>(&tracker.data_);
+    assert(tracker_info);
+    std::printf("Re-request seconds: %" PRIu64 "\n", tracker_info->rerequest_dt_secs_);
+    std::printf("Peers count       : %zu\n", tracker_info->peers_.size());
+    assert(!tracker_info->peers_.empty());
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
-    for (const auto& _ : info->peers_)
+    for (const auto& _ : tracker_info->peers_)
     {
         (void)_;
         peers.emplace_back(io_context);
     }
 
     Pieces pieces;
-    pieces.pieces_count_ = client->get_pieces_count();
-    pieces.piece_size_ = client->get_piece_size_bytes();
-    pieces.total_size_ = client->get_total_size_bytes();
+    pieces.pieces_count_ = client.get_pieces_count();
+    pieces.piece_size_ = client.get_piece_size_bytes();
+    pieces.total_size_ = client.get_total_size_bytes();
 
     _x_total_bytes_ = pieces.total_size_;
     _x_total_pieces_ = pieces.pieces_count_;
-    _x_active_peers_ = std::uint32_t(info->peers_.size());
+    _x_active_peers_ = std::uint32_t(tracker_info->peers_.size());
     _x_total_peers_ = _x_active_peers_;
 
     std::default_random_engine rng{random()};
-    std::shuffle(std::begin(info->peers_), std::end(info->peers_), rng);
+    std::shuffle(std::begin(tracker_info->peers_), std::end(tracker_info->peers_), rng);
 
-    for (std::size_t i = 0, count = info->peers_.size(); i < count; ++i)
+    for (std::size_t i = 0, count = tracker_info->peers_.size(); i < count; ++i)
     {
         asio::co_spawn(io_context
-            , DownloadFromPeer(io_context, *client, info->peers_[i], pieces, peers[i])
+            , DownloadFromPeer(io_context, client, tracker_info->peers_[i], pieces, peers[i])
             , [](std::exception_ptr, bool)
         {
             --_x_active_peers_;

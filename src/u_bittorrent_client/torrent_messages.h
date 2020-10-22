@@ -8,7 +8,6 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/redirect_error.hpp>
 
-#include <optional>
 #include <variant>
 
 #include <cstdint>

@@ -43,75 +43,69 @@ namespace be
             && (std::memcmp(response.info_hash_.data_, info_hash.data_, sizeof(info_hash.data_)) == 0);
     }
 
-    static std::optional<TorrentClient::HTTPTrackerRequest>
+    static outcome::result<TorrentClient::HTTPTrackerRequest>
         TryBuildHTTPTrackerRequest(const Url& url)
     {
-        std::optional<TorrentClient::HTTPTrackerRequest> request(std::in_place);
-        request->host_ = url.host();
-        if (request->host_.empty()
+        TorrentClient::HTTPTrackerRequest request;
+        request.host_ = url.host();
+        if (request.host_.empty()
             // We support raw HTTP requests only for now.
             || url.scheme() != "http")
         {
-            return std::nullopt;
+            return outcome::failure(ClientErrorc::TODO);
         }
-        request->port_ = 80;
+        request.port_ = 80;
         if (!url.port().empty())
         {
             std::uint64_t v = 0;
             if (!ParseLength(url.port(), v))
             {
-                return std::nullopt;
+                return outcome::failure(ClientErrorc::TODO);
             }
-            request->port_ = static_cast<std::uint16_t>(v);
+            request.port_ = static_cast<std::uint16_t>(v);
         }
-        request->get_uri_ = url.path();
-        if (request->get_uri_.empty())
+        request.get_uri_ = url.path();
+        if (request.get_uri_.empty())
         {
-            request->get_uri_ += '/';
+            request.get_uri_ += '/';
         }
-        request->get_uri_ += url.query_str();
-        return request;
+        request.get_uri_ += url.query_str();
+        return outcome::success(std::move(request));
     }
 
     /*explicit*/ TorrentPeer::TorrentPeer(asio::io_context& io_context)
         : io_context_(&io_context)
         , socket_(io_context)
-        , info_()
+        , peer_id_()
+        , extensions_()
         , bitfield_()
         , unchocked_(false)
     {
     }
 
-    /*static*/ std::optional<TorrentClient> TorrentClient::make(
+    /*static*/ outcome::result<TorrentClient> TorrentClient::make(
         const char* torrent_file_path
         , std::random_device& random)
     {
-        std::optional<TorrentClient> client(std::in_place);
+        const FileBuffer buffer = ReadAllFileAsBinary(torrent_file_path);
+        if (!buffer.data_)
         {
-            const FileBuffer buffer = ReadAllFileAsBinary(torrent_file_path);
-            if (!buffer.data_)
-            {
-                return std::nullopt;
-            }
-            auto torrent = ParseTorrentFileContent(AsStringView(buffer));
-            if (!torrent)
-            {
-                return std::nullopt;
-            }
-
-            client->metainfo_ = std::move(torrent.value().metainfo_);
-            client->info_hash_ = GetSHA1(AsStringView(buffer
-                , torrent.value().info_position_.start_
-                , torrent.value().info_position_.end_));
+            return outcome::failure(ClientErrorc::TODO);
         }
+        OUTCOME_TRY(torrent, ParseTorrentFileContent(AsStringView(buffer)));
 
-        client->peer_id_ = GetRandomPeerId(random);
+        TorrentClient client;
+        client.metainfo_ = std::move(torrent.metainfo_);
+        client.info_hash_ = GetSHA1(AsStringView(buffer
+            , torrent.info_position_.start_
+            , torrent.info_position_.end_));
+        client.peer_id_ = GetRandomPeerId(random);
         return client;
     }
 
     auto TorrentClient::get_tracker_request_info(
         std::uint16_t server_port /*= 6882*/) const
-            -> std::optional<HTTPTrackerRequest>
+            -> outcome::result<HTTPTrackerRequest>
     {
         const std::size_t pieces = get_pieces_count();
         const std::size_t uploaded_pieces = 0;
@@ -133,20 +127,16 @@ namespace be
             return TryBuildHTTPTrackerRequest(url);
         }
         catch (...) { }
-        return std::nullopt;
+        return outcome::failure(ClientErrorc::TODO);
     }
 
-    asio::awaitable<std::optional<be::TrackerResponse>>
+    asio::awaitable<outcome::result<be::TrackerResponse>>
         TorrentClient::request_torrent_peers(asio::io_context& io_context)
     {
-        auto http = get_tracker_request_info();
-        if (!http) { co_return std::nullopt; }
-        auto body = co_await HTTP_GET(
-            io_context, http->host_, http->get_uri_, http->port_);
-        if (!body) { co_return std::nullopt; }
-        auto r = be::ParseTrackerCompactResponseContent(body.value());
-        if (!r) { co_return std::nullopt; }
-        co_return r.value();
+        OUTCOME_CO_TRY(http, get_tracker_request_info());
+        OUTCOME_CO_TRY(body, co_await HTTP_GET(io_context
+            , http.host_, http.get_uri_, http.port_));
+        co_return be::ParseTrackerCompactResponseContent(body);
     }
 
     std::uint32_t TorrentClient::get_pieces_count() const
@@ -194,8 +184,8 @@ namespace be
             co_return outcome::failure(ClientErrorc::TODO);
         }
         
-        info_.peer_id_ = parsed.peer_id_;
-        info_.extensions_ = parsed.reserved_;
+        peer_id_ = parsed.peer_id_;
+        extensions_ = parsed.reserved_;
         co_return outcome::success();
     }
 

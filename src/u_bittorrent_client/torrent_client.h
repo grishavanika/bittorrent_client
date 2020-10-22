@@ -8,16 +8,8 @@
 
 #include <asio.hpp>
 
-#include <optional>
-
 namespace be
 {
-    struct PeerInfo
-    {
-        PeerId peer_id_;
-        ExtensionsBuffer extensions_;
-    };
-
     struct TorrentPeer
     {
         explicit TorrentPeer(asio::io_context& io_context);
@@ -31,14 +23,15 @@ namespace be
         asio::io_context* io_context_ = nullptr;
         asio::ip::tcp::socket socket_;
         // Information about peer that we are connected to.
-        PeerInfo info_;
+        PeerId peer_id_;
+        ExtensionsBuffer extensions_;
         Message_Bitfield bitfield_;
         bool unchocked_ = false;
     };
 
     struct TorrentClient
     {
-        static std::optional<TorrentClient> make(
+        static outcome::result<TorrentClient> make(
             const char* torrent_file_path
             , std::random_device& random);
 
@@ -49,10 +42,10 @@ namespace be
             std::string get_uri_;
         };
 
-        std::optional<HTTPTrackerRequest> get_tracker_request_info(
+        outcome::result<HTTPTrackerRequest> get_tracker_request_info(
             std::uint16_t server_port = 6882) const;
 
-        asio::awaitable<std::optional<be::TrackerResponse>>
+        asio::awaitable<outcome::result<be::TrackerResponse>>
             request_torrent_peers(asio::io_context& io_context);
 
         std::uint32_t get_pieces_count() const;
