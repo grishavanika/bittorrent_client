@@ -1,4 +1,6 @@
 #include "torrent_messages.h"
+#include "as_result.hpp"
+
 #include <small_utils/utils_string.h>
 
 #include <asio/detail/socket_ops.hpp>
@@ -10,14 +12,6 @@
 #include <cstring>
 #include <cassert>
 #include <cstdint>
-
-#if defined(ASIO_ENABLE_HANDLER_TRACKING)
-#  define coro(EC) \
-    asio::redirect_error(asio::use_awaitable_t(__FILE__, __LINE__, __FUNCSIG__), ec)
-#else
-#  define coro(EC) \
-    asio::redirect_error(asio::use_awaitable, ec)
-#endif
 
 namespace be
 {
@@ -41,18 +35,13 @@ namespace be
     } // namespace detail
 
     template<typename Message>
-    static void EmplaceMessage(AnyMessage& m, std::vector<std::uint8_t>& data)
+    static outcome::result<AnyMessage> MakeMessage(std::vector<std::uint8_t>& data)
     {
-        // Nothing should be constructed yet.
-        assert(m.index() == 0);
         // We don't strip 1-byte PeerMessageId
         // to avoid vector reallocation.
         assert(data.size() >= 1);
-        auto o = Message::FromBuffer(std::move(data));
-        if (o)
-        {
-            m.emplace<Message>(std::move(*o));
-        }
+        OUTCOME_TRY(m, Message::FromBuffer(std::move(data)));
+        return outcome::success(AnyMessage(std::move(m)));
     }
 
     /*static*/ auto Message_Handshake::SerializeDefault(
@@ -72,12 +61,12 @@ namespace be
         return buffer;
     }
 
-    /*static*/ std::optional<Message_Bitfield>
+    /*static*/ outcome::result<Message_Bitfield>
         Message_Bitfield::ParseNetwork(std::vector<std::uint8_t> payload)
     {
-        std::optional<Message_Bitfield> o(std::in_place);
-        o->data_ = std::move(payload);
-        return o;
+        Message_Bitfield m;
+        m.data_ = std::move(payload);
+        return outcome::success(std::move(m));
     }
 
     bool Message_Bitfield::has_piece(std::size_t index) const
@@ -116,21 +105,25 @@ namespace be
         return true;
     }
 
-    /*static*/ std::optional<Message_Handshake>
+    /*static*/ outcome::result<Message_Handshake>
         Message_Handshake::ParseNetwork(const Buffer& buffer)
     {
-        std::optional<Message_Handshake> m(std::in_place);
+        Message_Handshake m;
         const bool ok = BytesReader::make(buffer.data_)
-            .read(m->protocol_length_)
-            .consume(m->pstr_, m->protocol_length_/*how many*/)
-            .read(m->reserved_.data_)
-            .read(m->info_hash_.data_)
-            .read(m->peer_id_.data_)
+            .read(m.protocol_length_)
+            .consume(m.pstr_, m.protocol_length_/*how many*/)
+            .read(m.reserved_.data_)
+            .read(m.info_hash_.data_)
+            .read(m.peer_id_.data_)
             .finalize();
-        return (ok ? m : std::nullopt);
+        if (ok)
+        {
+            return outcome::success(std::move(m));
+        }
+        return outcome::failure(ClientErrorc::TODO);
     }
 
-    /*static*/ std::optional<Message_Have>
+    /*static*/ outcome::result<Message_Have>
         Message_Have::ParseNetwork(std::vector<std::uint8_t> payload)
     {
         PeerMessageId id{};
@@ -139,10 +132,13 @@ namespace be
             .read(id)
             .read(piece_index_network)
             .finalize();
-        if (!ok) { return std::nullopt; }
-        std::optional<Message_Have> o(std::in_place);
-        o->piece_index_ = detail::NetworkToHostOrder(piece_index_network);
-        return o;
+        if (ok)
+        {
+            Message_Have m;
+            m.piece_index_ = detail::NetworkToHostOrder(piece_index_network);
+            return outcome::success(std::move(m));
+        }
+        return outcome::failure(ClientErrorc::TODO);
     }
 
     auto Message_Have::serialize() const -> Buffer
@@ -169,7 +165,7 @@ namespace be
         return buffer;
     }
 
-    std::optional<Message_Piece>
+    outcome::result<Message_Piece>
         Message_Piece::ParseNetwork(std::vector<std::uint8_t> payload)
     {
         PeerMessageId id{};
@@ -184,15 +180,15 @@ namespace be
         if ((piece_size == 0)
             || (piece_size == std::size_t(-1)))
         {
-            return std::nullopt;
+            return outcome::failure(ClientErrorc::TODO);
         }
 
-        std::optional<Message_Piece> o(std::in_place);
-        o->data_offset_ = (reader.current_ - &payload[0]);
-        o->piece_index_ = detail::NetworkToHostOrder(piece_index_network);
-        o->piece_begin_ = detail::NetworkToHostOrder(begin_network);
-        o->payload_ = std::move(payload);
-        return o;
+        Message_Piece m;
+        m.data_offset_ = (reader.current_ - &payload[0]);
+        m.piece_index_ = detail::NetworkToHostOrder(piece_index_network);
+        m.piece_begin_ = detail::NetworkToHostOrder(begin_network);
+        m.payload_ = std::move(payload);
+        return outcome::success(std::move(m));
     }
 
     std::uint32_t Message_Piece::size() const
@@ -207,60 +203,54 @@ namespace be
         return &payload_[data_offset_];
     }
 
-    asio::awaitable<AnyMessage> ReadAnyMessage(asio::ip::tcp::socket& peer)
+    asio::awaitable<outcome::result<AnyMessage>> ReadAnyMessage(asio::ip::tcp::socket& peer)
     {
-        std::error_code ec;
-
+        auto coro = as_result(asio::use_awaitable);
         std::uint32_t length = 0;
-        (void)co_await asio::async_read(peer
-            , asio::buffer(&length, sizeof(length)), coro(ec));
-        if (ec) { co_return AnyMessage(); }
+        OUTCOME_CO_TRY(co_await asio::async_read(peer
+            , asio::buffer(&length, sizeof(length)), coro));
         length = detail::NetworkToHostOrder(length);
         if (length == 0)
         {
-            AnyMessage m;
-            m.emplace<Message_KeepAlive>();
-            co_return m;
+            co_return outcome::success(AnyMessage(Message_KeepAlive{}));
         }
 
         std::vector<std::uint8_t> data;
         data.resize(length);
-        (void)co_await asio::async_read(peer
-            , asio::buffer(&data[0], length), coro(ec));
-        if (ec) { co_return AnyMessage(); }
+        OUTCOME_CO_TRY(co_await asio::async_read(peer
+            , asio::buffer(&data[0], length), coro));
         PeerMessageId message_id{};
         BytesReader::make(&data[0], length).read(message_id);
-        
-        AnyMessage m;
+
         switch (message_id)
         {
-        case PeerMessageId::Choke:         EmplaceMessage<Message_Choke>(m, data);         break;
-        case PeerMessageId::Unchoke:       EmplaceMessage<Message_Unchoke>(m, data);       break;
-        case PeerMessageId::Interested:    EmplaceMessage<Message_Interested>(m, data);    break;
-        case PeerMessageId::NotInterested: EmplaceMessage<Message_NotInterested>(m, data); break;
-        case PeerMessageId::Have:          EmplaceMessage<Message_Have>(m, data);          break;
-        case PeerMessageId::Bitfield:      EmplaceMessage<Message_Bitfield>(m, data);      break;
-        case PeerMessageId::Request:       EmplaceMessage<Message_Request>(m, data);       break;
-        case PeerMessageId::Piece:         EmplaceMessage<Message_Piece>(m, data);         break;
-        case PeerMessageId::Cancel:        EmplaceMessage<Message_Cancel>(m, data);        break;
-        default:                           EmplaceMessage<Message_Unknown>(m, data);       break;
+        case PeerMessageId::Choke:         co_return MakeMessage<Message_Choke>(data);
+        case PeerMessageId::Unchoke:       co_return MakeMessage<Message_Unchoke>(data);
+        case PeerMessageId::Interested:    co_return MakeMessage<Message_Interested>(data);
+        case PeerMessageId::NotInterested: co_return MakeMessage<Message_NotInterested>(data);
+        case PeerMessageId::Have:          co_return MakeMessage<Message_Have>(data);
+        case PeerMessageId::Bitfield:      co_return MakeMessage<Message_Bitfield>(data);
+        case PeerMessageId::Request:       co_return MakeMessage<Message_Request>(data);
+        case PeerMessageId::Piece:         co_return MakeMessage<Message_Piece>(data);
+        case PeerMessageId::Cancel:        co_return MakeMessage<Message_Cancel>(data);
+        default:                           co_return MakeMessage<Message_Unknown>(data);
         }
-        co_return m;
+        co_return outcome::failure(ClientErrorc::TODO);
     }
 
-    asio::awaitable<bool> SendAnyMessage(asio::ip::tcp::socket& peer
-        , const void* data, std::size_t size)
+    asio::awaitable<outcome::result<void>> SendAnyMessage(
+        asio::ip::tcp::socket& peer
+        , const void* data
+        , std::size_t size)
     {
         if (!data || (size == 0))
         {
-            co_return false;
+            co_return outcome::failure(ClientErrorc::TODO);
         }
 
-        std::error_code ec;
-        (void)co_await asio::async_write(peer
-            , asio::buffer(data, size), coro(ec));
-        if (ec) { co_return false; }
-        co_return true;
+        OUTCOME_CO_TRY(co_await asio::async_write(peer
+            , asio::buffer(data, size), as_result(asio::use_awaitable)));
+        co_return outcome::success();
     }
 
 } // namespace be

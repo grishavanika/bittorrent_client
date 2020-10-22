@@ -1,5 +1,6 @@
 #include "torrent_client.h"
 #include "utils_http.h"
+#include "as_result.hpp"
 
 #include <bencoding/be_torrent_file_parse.h>
 #include <small_utils/utils_read_file.h>
@@ -22,6 +23,15 @@ namespace be
     {
         const void* data = peer.data_;
         return std::string(static_cast<const char*>(data), sizeof(peer.data_));
+    }
+
+    static asio::ip::tcp::endpoint AsEndpoint(const PeerAddress& address)
+    {
+        // network_to_*
+        using namespace asio::detail::socket_ops;
+        return asio::ip::tcp::endpoint(asio::ip::address_v4(
+            network_to_host_long(address.ipv4_))
+            , network_to_host_short(address.port_));
     }
 
     static bool IsValidHandshakeResponse(
@@ -61,6 +71,15 @@ namespace be
         }
         request->get_uri_ += url.query_str();
         return request;
+    }
+
+    /*explicit*/ TorrentPeer::TorrentPeer(asio::io_context& io_context)
+        : io_context_(&io_context)
+        , socket_(io_context)
+        , info_()
+        , bitfield_()
+        , unchocked_(false)
+    {
     }
 
     /*static*/ std::optional<TorrentClient> TorrentClient::make(
@@ -158,48 +177,26 @@ namespace be
         return std::uint32_t(metainfo_.info_.piece_length_bytes_);
     }
 
-    asio::awaitable<std::optional<asio::ip::tcp::socket>>
-        TorrentPeer::do_connect(PeerAddress address)
+    asio::awaitable<outcome::result<void>> TorrentPeer::start(
+        const PeerAddress& address
+        , const SHA1Bytes& info_hash
+        , const PeerId& peer_id)
     {
-        // network_to_*
-        using namespace asio::detail::socket_ops;
-
-        std::error_code ec;
-        auto coro = asio::redirect_error(asio::use_awaitable, ec);
-
-        const asio::ip::tcp::endpoint endpoint(asio::ip::address_v4(
-            network_to_host_long(address.ipv4_))
-            , network_to_host_short(address.port_));
-        asio::ip::tcp::socket socket(*io_context_);
-        co_await socket.async_connect(endpoint, coro);
-        if (ec) { co_return std::nullopt; }
-        co_return std::move(socket);
-    }
-
-    asio::awaitable<std::optional<PeerInfo>>
-        TorrentPeer::do_handshake(const SHA1Bytes& info_hash, const PeerId& peer_id)
-    {
-        assert(socket_);
-
-        std::error_code ec;
-        auto coro = asio::redirect_error(asio::use_awaitable, ec);
-
+        auto coro = as_result(asio::use_awaitable);
+        OUTCOME_CO_TRY(co_await socket_.async_connect(AsEndpoint(address), coro));
         const auto handshake = Message_Handshake::SerializeDefault(info_hash, peer_id);
-        (void)co_await asio::async_write(*socket_
-            , asio::buffer(handshake.data_, sizeof(handshake.data_)), coro);
-        if (ec) { co_return std::nullopt; }
+        OUTCOME_CO_TRY(co_await asio::async_write(socket_, asio::buffer(handshake.data_), coro));
         Message_Handshake::Buffer response;
-        (void)co_await asio::async_read(*socket_
-            , asio::buffer(response.data_, sizeof(response.data_)), coro);
-        if (ec) { co_return std::nullopt; }
-        auto parsed = Message_Handshake::ParseNetwork(response);
-        if (!parsed) { co_return std::nullopt; }
-        if (!IsValidHandshakeResponse(*parsed, info_hash)) { co_return std::nullopt; }
+        OUTCOME_CO_TRY(co_await asio::async_read(socket_, asio::buffer(response.data_), coro));
+        OUTCOME_CO_TRY(parsed, Message_Handshake::ParseNetwork(response));
+        if (!IsValidHandshakeResponse(parsed, info_hash))
+        {
+            co_return outcome::failure(ClientErrorc::TODO);
+        }
         
-        std::optional<PeerInfo> info(std::in_place);
-        info->peer_id_ = parsed->peer_id_;
-        info->extensions_ = parsed->reserved_;
-        co_return info;
+        info_.peer_id_ = parsed.peer_id_;
+        info_.extensions_ = parsed.reserved_;
+        co_return outcome::success();
     }
 
 } // namespace be

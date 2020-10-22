@@ -1,4 +1,6 @@
 #pragma once
+#include "client_errors.h"
+
 #include <small_utils/utils_bytes.h>
 
 #include <asio/awaitable.hpp>
@@ -59,7 +61,7 @@ namespace be
         static Buffer SerializeDefault(
             const SHA1Bytes& info_hash, const PeerId& client_id);
 
-        static std::optional<Message_Handshake> ParseNetwork(const Buffer& buffer);
+        static outcome::result<Message_Handshake> ParseNetwork(const Buffer& buffer);
     };
 
     template<typename Message, PeerMessageId Id>
@@ -71,17 +73,17 @@ namespace be
 
         using BufferNoPayload = Buffer<k_size_no_payload, Message>;
 
-        static std::optional<Message> FromBuffer(std::vector<std::uint8_t> payload)
+        static outcome::result<Message> FromBuffer(std::vector<std::uint8_t> payload)
         {
             // 1-byte PeerMessageId at the beginning.
             assert(payload.size() >= 1);
             return Message::ParseNetwork(std::move(payload));
         }
 
-        static std::optional<Message> ParseNetwork(std::vector<std::uint8_t> payload)
+        static outcome::result<Message> ParseNetwork(std::vector<std::uint8_t> payload)
         {
             (void)payload; // Ignore payload by default.
-            return std::optional<Message>(std::in_place);
+            return outcome::success(Message{});
         }
 
         BufferNoPayload serialize() const
@@ -107,7 +109,7 @@ namespace be
     {
         std::uint32_t piece_index_ = 0;
 
-        static std::optional<Message_Have> ParseNetwork(std::vector<std::uint8_t> payload);
+        static outcome::result<Message_Have> ParseNetwork(std::vector<std::uint8_t> payload);
 
         static constexpr std::size_t k_size =
               sizeof(std::uint32_t)  // 4 bytes, length
@@ -127,7 +129,7 @@ namespace be
         bool has_piece(std::size_t index) const;
         bool set_piece(std::size_t index);
 
-        static std::optional<Message_Bitfield> ParseNetwork(std::vector<std::uint8_t> payload);
+        static outcome::result<Message_Bitfield> ParseNetwork(std::vector<std::uint8_t> payload);
     };
 
     struct Message_Request : Message_Base<Message_Request, PeerMessageId::Request>
@@ -162,7 +164,7 @@ namespace be
         std::uint32_t size() const;
         const void* data() const;
 
-        static std::optional<Message_Piece> ParseNetwork(std::vector<std::uint8_t> payload);
+        static outcome::result<Message_Piece> ParseNetwork(std::vector<std::uint8_t> payload);
     };
 
     using AnyMessage = std::variant<std::monostate
@@ -178,26 +180,29 @@ namespace be
         , Message_KeepAlive
         , Message_Unknown>;
 
-    asio::awaitable<AnyMessage> ReadAnyMessage(asio::ip::tcp::socket& peer);
-    asio::awaitable<bool> SendAnyMessage(asio::ip::tcp::socket& peer
+    asio::awaitable<outcome::result<AnyMessage>> ReadAnyMessage(asio::ip::tcp::socket& peer);
+    asio::awaitable<outcome::result<void>> SendAnyMessage(asio::ip::tcp::socket& peer
         , const void* data, std::size_t size);
 
     template<typename Message>
-    asio::awaitable<std::optional<Message>> ReadMessage(asio::ip::tcp::socket& peer)
+    asio::awaitable<outcome::result<Message>> ReadMessage(asio::ip::tcp::socket& peer)
     {
-        AnyMessage m = co_await ReadAnyMessage(peer);
-        if (Message* exact = std::get_if<Message>(&m))
+        OUTCOME_CO_TRY(any_m, co_await ReadAnyMessage(peer));
+        if (Message* exact = std::get_if<Message>(&any_m))
         {
-            co_return std::move(*exact);
+            co_return outcome::success(std::move(*exact));
         }
-        co_return std::nullopt;
+        co_return outcome::failure(ClientErrorc::TODO);
     }
 
     template<typename Message>
-    asio::awaitable<bool> SendMessage(asio::ip::tcp::socket& peer, const Message& m)
+    asio::awaitable<outcome::result<void>> SendMessage(
+        asio::ip::tcp::socket& peer, const Message& m)
     {
         const auto buffer = m.serialize();
-        co_return co_await SendAnyMessage(peer, buffer.data_, sizeof(buffer.data_));
+        OUTCOME_CO_TRY(co_await SendAnyMessage(
+            peer, buffer.data_, sizeof(buffer.data_)));
+        co_return outcome::success();
     }
 
 } // namespace be

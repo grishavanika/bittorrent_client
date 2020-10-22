@@ -144,7 +144,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         // coroutine exit.
         auto retry = folly::makeGuard([piece, &pieces] { pieces.push_piece_to_retry(*piece); });
 
-        if (!peer.bitfield_->has_piece(piece->piece_index_))
+        if (!peer.bitfield_.has_piece(piece->piece_index_))
         {
             // Try another one. Peer has no such a piece.
             continue;
@@ -166,20 +166,19 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
                     request.piece_index_ = piece->piece_index_;
                     request.offset_ = piece->requested_;
                     request.length_ = block_size;
-                    const bool ok = co_await SendMessage(*peer.socket_, request);
-                    if (!ok) { co_return false; }
+                    auto sent = co_await SendMessage(peer.socket_, request);
+                    if (!sent) { co_return false; }
                     
                     ++backlog;
                     piece->requested_ += block_size;
                 }
             }
 
-            be::AnyMessage m = co_await be::ReadAnyMessage(*peer.socket_);
+            auto m_any = co_await be::ReadAnyMessage(peer.socket_);
+            if (!m_any) { co_return false; }
+            be::AnyMessage& m = m_any.value();
             switch (m.index())
             {
-            case 0/*std::monostate*/:
-                // Failed to read. Just quit this peer.
-                co_return false;
             case 1/*Message_Choke*/:
                 peer.unchocked_ = false;
                 break;
@@ -197,7 +196,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
             case 5/*Message_Have*/:
             {
                 const auto& have = std::get<be::Message_Have>(m);
-                if (!peer.bitfield_->set_piece(have.piece_index_))
+                if (!peer.bitfield_.set_piece(have.piece_index_))
                 {
                     assert(false && "Failed to set HAVE piece");
                     // Non-critical, continue.
@@ -257,8 +256,8 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         // # UUU: validate and retry on hash mismatch.
         be::Message_Have have;
         have.piece_index_ = piece->piece_index_;
-        const bool ok = co_await SendMessage(*peer.socket_, have);
-        if (!ok) { co_return false; }
+        auto sent = co_await SendMessage(peer.socket_, have);
+        if (!sent) { co_return false; }
     }
 }
 
@@ -269,19 +268,16 @@ asio::awaitable<bool> DownloadFromPeer(
     , Pieces& pieces
     , be::TorrentPeer& peer)
 {
-    peer.io_context_ = &io_context;
-    peer.socket_ = co_await peer.do_connect(address);
-    if (!peer.socket_) { co_return false; }
-    peer.info_ = co_await peer.do_handshake(client.info_hash_, client.peer_id_);
-    if (!peer.info_) { co_return false; }
+    auto started = co_await peer.start(address, client.info_hash_, client.peer_id_);
+    if (!started) { co_return false; }
+    auto bitfield = co_await be::ReadMessage<be::Message_Bitfield>(peer.socket_);
+    if (!bitfield) { co_return false; }
+    peer.bitfield_ = std::move(bitfield.value());
 
-    peer.bitfield_ = co_await be::ReadMessage<be::Message_Bitfield>(*peer.socket_);
-    if (!peer.bitfield_) { co_return false; }
-
-    bool ok = co_await be::SendMessage(*peer.socket_, be::Message_Unchoke());
-    if (!ok) { co_return false; }
-    ok = co_await be::SendMessage(*peer.socket_, be::Message_Interested());
-    if (!ok) { co_return false; }
+    auto sent = co_await be::SendMessage(peer.socket_, be::Message_Unchoke());
+    if (!sent) { co_return false; }
+    sent = co_await be::SendMessage(peer.socket_, be::Message_Interested());
+    if (!sent) { co_return false; }
 
     co_return co_await TryDownloadPiecesFromPeer(peer, pieces);
 }
@@ -328,7 +324,11 @@ int main()
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
-    peers.resize(info->peers_.size());
+    for (const auto& _ : info->peers_)
+    {
+        (void)_;
+        peers.emplace_back(io_context);
+    }
 
     Pieces pieces;
     pieces.pieces_count_ = client->get_pieces_count();
