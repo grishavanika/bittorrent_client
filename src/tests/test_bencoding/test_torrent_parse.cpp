@@ -22,7 +22,7 @@ static std::string GetSHA1(const FileBuffer& buffer, ElementPosition position)
 
 TEST(Torrent, NormalSingleFileTorrent)
 {
-    // #UUU: test on local data.
+    // #QQQ: test on local data.
     const char k_file[] = R"(K:\debian-edu-10.6.0-amd64-netinst.iso.torrent)";
     const FileBuffer buffer = ReadAllFileAsBinary(k_file);
     ASSERT_NE(buffer.data_, nullptr);
@@ -36,7 +36,7 @@ TEST(Torrent, NormalSingleFileTorrent)
 
 TEST(Torrent, NormalMultiFileTorrent)
 {
-    // #UUU: test on local data.
+    // #QQQ: test on local data.
     const char k_file[] = R"(K:\32F6DBF1412D24A370C12CC90D289AFFB4806284.torrent)";
     const FileBuffer buffer = ReadAllFileAsBinary(k_file);
     ASSERT_NE(buffer.data_, nullptr);

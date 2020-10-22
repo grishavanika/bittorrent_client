@@ -37,7 +37,7 @@ struct Pieces
         std::uint32_t downloaded_ = 0;
         std::uint32_t requested_ = 0;
 
-        // #UUU: temporary.
+        // #QQQ: temporary.
         std::vector<std::uint8_t> data_;
     };
 
@@ -95,7 +95,7 @@ struct Pieces
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// #UUU: temporary for debug.
+// #QQQ: temporary for debug.
 
 static std::uint64_t _x_downloaded_bytes_ = 0;
 static std::uint32_t _x_downloaded_pieces_ = 0;
@@ -135,7 +135,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         Pieces::PieceState* piece = pieces.pop_piece_to_download();
         if (!piece)
         {
-            // #UUU: not quite correct. Some pieces may be in progress,
+            // #QQQ: not quite correct. Some pieces may be in progress,
             // but then fail to complete. We need some peers to be
             // active to re-schedule the piece.
             co_return false;
@@ -328,12 +328,7 @@ int main()
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
-    for (const auto& _ : info->peers_)
-    {
-        (void)_;
-        auto& peer = peers.emplace_back(be::TorrentPeer{});
-        peer.io_context_ = &io_context;
-    }
+    peers.resize(info->peers_.size());
 
     Pieces pieces;
     pieces.pieces_count_ = client->get_pieces_count();
