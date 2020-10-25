@@ -78,14 +78,12 @@ struct PiecesToDownload
             piece->downloaded_ = 0;
             piece->requested_ = 0;
 
+            // We don't check `have_pieces` for a reason:
+            // let's caller decide if it needs to retry or stop
+            // connection.
             auto handle = pieces_.end();
             --handle; // to the last element
-            if (have_pieces.has_piece(piece_index))
-            {
-                return handle;
-            }
-            push_piece_to_retry(handle);
-            return pieces_.end();
+            return handle;
         }
         if (to_retry_.empty())
         {
@@ -94,6 +92,10 @@ struct PiecesToDownload
 
         for (auto it = to_retry_.begin(); it != to_retry_.end(); ++it)
         {
+            // Check a caller has a piece.
+            // In case caller does not have **all** retry pieces
+            // we'll return fail to notify the caller there is
+            // no need to try again.
             if (!have_pieces.has_piece((**it).piece_index_))
             {
                 continue;
@@ -134,6 +136,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         PiecesToDownload::Handle piece = pieces.pop_piece_to_download(peer.bitfield_);
         if (piece == pieces.pieces_.end())
         {
+            // We stop and terminate connection.
             co_return false;
         }
         // Put back to the queue on early out or
@@ -146,6 +149,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         if (!peer.bitfield_.has_piece(piece->piece_index_))
         {
             // Try another one. Peer has no such a piece.
+            // Connection is still used: peer may have other pieces.
             continue;
         }
 
@@ -308,22 +312,15 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
 
     auto tracker_info = std::get_if<be::TrackerResponse::OnSuccess>(&tracker.data_);
     assert(tracker_info);
-    std::printf("Re-request seconds: %" PRIu64 "\n", tracker_info->rerequest_dt_secs_);
-    std::printf("Peers count       : %zu\n", tracker_info->peers_.size());
     assert(!tracker_info->peers_.empty());
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
-    for (const auto& _ : tracker_info->peers_)
+    for (auto address : tracker_info->peers_)
     {
-        (void)_;
         peers.emplace_back(io_context);
-    }
-
-    for (std::size_t i = 0, count = tracker_info->peers_.size(); i < count; ++i)
-    {
         asio::co_spawn(io_context
-            , DownloadFromPeer(io_context, client, tracker_info->peers_[i], pieces, peers[i])
+            , DownloadFromPeer(io_context, client, address, pieces, peers.back())
             , asio::detached);
     }
 
