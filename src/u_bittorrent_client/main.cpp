@@ -305,7 +305,8 @@ void WriteAllPiecesToFile(const std::vector<PiecesToDownload::PieceState>& piece
 
 int main()
 {
-    const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
+    //const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
+    const char* const torrent_file = R"(K:\lubuntu-20.10-desktop-amd64.iso.torrent)";
     const char* const output_file = R"(K:\torrent.iso)";
 
     std::random_device random;

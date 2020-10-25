@@ -47,15 +47,16 @@ namespace be
     static outcome::result<TorrentClient::HTTPTrackerRequest>
         TryBuildHTTPTrackerRequest(const Url& url)
     {
-        TorrentClient::HTTPTrackerRequest request;
-        request.host_ = url.host();
-        if (request.host_.empty()
-            // We support raw HTTP requests only for now.
-            || url.scheme() != "http")
+        const bool allowed_scheme = ((url.scheme() == "http") || (url.scheme() == "https"));
+        if (url.host().empty() || !allowed_scheme)
         {
             return outcome::failure(ClientErrorc::TODO);
         }
-        request.port_ = 80;
+
+        TorrentClient::HTTPTrackerRequest request;
+        request.host_ = url.host();
+        request.use_https_ = (url.scheme() == "https");
+        request.port_ = (request.use_https_ ? 443 : 80);
         if (!url.port().empty())
         {
             std::uint64_t v = 0;
@@ -145,9 +146,13 @@ namespace be
             , const RequestInfo& request)
     {
         OUTCOME_CO_TRY(http, get_tracker_request_info(request));
-        OUTCOME_CO_TRY(body, co_await HTTP_GET(io_context
-            , http.host_, http.get_uri_, http.port_));
-        co_return be::ParseTrackerCompactResponseContent(body);
+        outcome::result<std::string> body = http.use_https_
+            ? co_await HTTPS_GET_NoVerification(io_context
+                , http.host_, http.get_uri_, http.port_)
+            : co_await HTTP_GET(io_context
+                , http.host_, http.get_uri_, http.port_);
+        OUTCOME_CO_TRY(body);
+        co_return be::ParseTrackerCompactResponseContent(body.value());
     }
 
     std::uint32_t TorrentClient::get_pieces_count() const

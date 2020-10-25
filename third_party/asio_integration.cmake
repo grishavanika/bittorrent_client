@@ -28,6 +28,20 @@ if (WIN32)
 endif ()
 
 if (MSVC)
+    # Hard-coded for now, VCPKG fails to build.
+    # Don't want to spend time on building this.
+    # Downloaded from:
+    # https://slproweb.com/products/Win32OpenSSL.html
+    add_library(OpenSSL_MSVC INTERFACE)
+    set(OpenSSL "C:/libs/OpenSSL-Win64")
+    target_include_directories(OpenSSL_MSVC INTERFACE
+        "${OpenSSL}/include")
+    target_link_libraries(OpenSSL_MSVC INTERFACE
+        "${OpenSSL}/lib/libssl.lib"
+        "${OpenSSL}/lib/libcrypto.lib")
+endif ()
+
+if (MSVC)
     target_compile_definitions(asio INTERFACE
         # Say ASIO that MSVC supports coroutines well.
         "-DASIO_HAS_CO_AWAIT"
@@ -39,6 +53,8 @@ if (MSVC)
 		# declaration of 'query' hides global declaration
         /wd4459
         )
+
+    target_link_libraries(asio INTERFACE OpenSSL_MSVC)
 endif ()
 
 if (clang_on_msvc)

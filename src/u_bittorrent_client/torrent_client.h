@@ -40,6 +40,7 @@ namespace be
             std::string host_;
             std::uint16_t port_ = 0;
             std::string get_uri_;
+            bool use_https_ = false;
         };
 
         struct RequestInfo
