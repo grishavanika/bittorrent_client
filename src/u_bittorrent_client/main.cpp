@@ -11,8 +11,8 @@
 #include <random>
 #include <algorithm>
 #include <iterator>
-#include <deque>
-#include <queue>
+#include <list>
+#include <functional>
 
 #include <cstdio>
 #include <cinttypes>
@@ -29,7 +29,9 @@ const std::uint32_t k_max_block = 16'384;
 // How much Request(s) send before reading the piece.
 const int k_max_backlog = 5;
 
-struct Pieces
+// Stupid and simple algorithm to distribute
+// N pieces needed to download, sequentially.
+struct PiecesToDownload
 {
     struct PieceState
     {
@@ -37,20 +39,22 @@ struct Pieces
         std::uint32_t downloaded_ = 0;
         std::uint32_t requested_ = 0;
 
-        // #QQQ: temporary.
         std::vector<std::uint8_t> data_;
     };
 
-    // deque<> so references are not invalidated
-    // on push_back().
-    std::deque<PieceState> pieces_;
-    std::deque<PieceState*> to_retry_;
+    // list<> so references and iterators are not invalidated.
+    // Looks like perfect match for this task.
+    std::list<PieceState> pieces_;
+    using Handle = std::list<PieceState>::iterator;
+    std::vector<Handle> to_retry_;
     
     std::uint32_t pieces_count_ = 0;
     std::uint32_t piece_size_ = 0;
     std::uint64_t total_size_ = 0;
 
     std::uint32_t next_piece_index_ = 0;
+    std::uint32_t downloaded_pieces_count_ = 0;
+    std::function<void (PieceState&)> on_new_piece;
 
     std::uint32_t get_piece_size(std::uint32_t piece_index) const
     {
@@ -63,86 +67,81 @@ struct Pieces
         return std::uint32_t(total_size_ - size);
     }
 
-    PieceState* pop_piece_to_download()
+    Handle pop_piece_to_download(const be::Message_Bitfield& have_pieces)
     {
-        if (next_piece_index_ < (pieces_count_ + 1))
+        if (next_piece_index_ < pieces_count_)
         {
-            std::uint32_t index = next_piece_index_++;
+            const std::uint32_t piece_index = next_piece_index_++;
             pieces_.push_back({});
             PieceState* piece = &pieces_.back();
-            piece->piece_index_ = index;
+            piece->piece_index_ = piece_index;
             piece->downloaded_ = 0;
             piece->requested_ = 0;
-            return piece;
+
+            auto handle = pieces_.end();
+            --handle; // to the last element
+            if (have_pieces.has_piece(piece_index))
+            {
+                return handle;
+            }
+            push_piece_to_retry(handle);
+            return pieces_.end();
         }
-        if (!to_retry_.empty())
+        if (to_retry_.empty())
         {
-            PieceState* piece = to_retry_.front();
-            to_retry_.pop_front();
+            return pieces_.end();
+        }
+
+        for (auto it = to_retry_.begin(); it != to_retry_.end(); ++it)
+        {
+            if (!have_pieces.has_piece((**it).piece_index_))
+            {
+                continue;
+            }
+            Handle piece = *it;
+            to_retry_.erase(it);
             return piece;
         }
-        return nullptr;
+        return pieces_.end();
     }
 
-    void push_piece_to_retry(PieceState& piece)
+    void push_piece_to_retry(Handle piece)
     {
         // Re-download all piece.
-        piece.downloaded_ = 0;
-        piece.requested_ = 0;
-        piece.data_.clear();
-        to_retry_.push_back(&piece);
+        piece->downloaded_ = 0;
+        piece->requested_ = 0;
+        piece->data_.clear();
+        to_retry_.push_back(piece);
+    }
+
+    void on_piece_downloaded(Handle piece)
+    {
+        ++downloaded_pieces_count_;
+        assert(on_new_piece);
+        assert(piece != pieces_.end());
+        on_new_piece(*piece);
+        pieces_.erase(piece);
     }
 };
 
-///////////////////////////////////////////////////////////////////////////////
-// #QQQ: temporary for debug.
-
-static std::uint64_t _x_downloaded_bytes_ = 0;
-static std::uint32_t _x_downloaded_pieces_ = 0;
-
-static std::uint64_t _x_total_bytes_ = 0;
-static std::uint32_t _x_total_pieces_ = 0;
-static std::uint32_t _x_total_peers_ = 0;
-static std::uint32_t _x_active_peers_ = 0;
-
-void NOTIFY_DOWNLOAD(const Pieces& pieces, const Pieces::PieceState& piece)
-{
-    _x_downloaded_bytes_ += piece.downloaded_;
-    _x_downloaded_pieces_ += 1;
-
-    const float percents = ((_x_downloaded_bytes_ * 100.f) / _x_total_bytes_);
-
-    printf("[%" PRIu32 "][%.2f %%]. "
-        "Pieces %" PRIu32 "/%" PRIu32 ". "
-        "Bytes %" PRIu64 "/%" PRIu64 ". "
-        "Peers %" PRIu32 "/%" PRIu32 ". "
-        "Retry queue size: %zu."
-        "\n"
-        , piece.piece_index_, percents
-        , _x_downloaded_pieces_, _x_total_pieces_
-        , _x_downloaded_bytes_, _x_total_bytes_
-        , _x_active_peers_, _x_total_peers_
-        , pieces.to_retry_.size());
-}
-
 asio::awaitable<bool> TryDownloadPiecesFromPeer(
-    be::TorrentPeer& peer, Pieces& pieces)
+    be::TorrentPeer& peer, PiecesToDownload& pieces)
 {
     // Mostly from https://blog.jse.li/posts/torrent/.
     // E.g.: https://github.com/veggiedefender/torrent-client/blob/master/p2p/p2p.go.
     while (true)
     {
-        Pieces::PieceState* piece = pieces.pop_piece_to_download();
-        if (!piece)
+        PiecesToDownload::Handle piece = pieces.pop_piece_to_download(peer.bitfield_);
+        if (piece == pieces.pieces_.end())
         {
-            // #QQQ: not quite correct. Some pieces may be in progress,
-            // but then fail to complete. We need some peers to be
-            // active to re-schedule the piece.
             co_return false;
         }
         // Put back to the queue on early out or
         // coroutine exit.
-        auto retry = folly::makeGuard([piece, &pieces] { pieces.push_piece_to_retry(*piece); });
+        auto retry = folly::makeGuard([piece, &pieces]
+        {
+            pieces.push_piece_to_retry(piece);
+        });
 
         if (!peer.bitfield_.has_piece(piece->piece_index_))
         {
@@ -250,12 +249,13 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         
         assert(piece->downloaded_ == piece_size);
 
+        const std::uint32_t piece_index = piece->piece_index_;
         retry.dismiss();
-        NOTIFY_DOWNLOAD(pieces, *piece);
+        pieces.on_piece_downloaded(piece);
 
         // # UUU: validate and retry on hash mismatch.
         be::Message_Have have;
-        have.piece_index_ = piece->piece_index_;
+        have.piece_index_ = piece_index;
         auto sent = co_await SendMessage(peer.socket_, have);
         if (!sent) { co_return false; }
     }
@@ -265,7 +265,7 @@ asio::awaitable<bool> DownloadFromPeer(
     asio::io_context& io_context
     , const be::TorrentClient& client
     , const be::PeerAddress& address
-    , Pieces& pieces
+    , PiecesToDownload& pieces
     , be::TorrentPeer& peer)
 {
     auto started = co_await peer.start(address, client.info_hash_, client.peer_id_);
@@ -282,32 +282,21 @@ asio::awaitable<bool> DownloadFromPeer(
     co_return co_await TryDownloadPiecesFromPeer(peer, pieces);
 }
 
-int main()
+void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
 {
-    const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
-    std::random_device random;
-    auto client = be::TorrentClient::make(torrent_file, random).value();
-
-    { // Validate size & pieces count & piece size.
-        const std::uint32_t pieces_count = client.get_pieces_count();
-        const std::uint32_t piece_size = client.get_piece_size_bytes();
-        const std::uint64_t total_size = client.get_total_size_bytes();
-        assert(pieces_count > 0);
-        assert(piece_size > 0);
-        const std::uint64_t size_except_last_piece = (std::uint64_t(piece_size) * std::uint64_t((pieces_count - 1)));
-        assert(size_except_last_piece < total_size);
-        const std::uint64_t last = (total_size - size_except_last_piece);
-        assert(last <= std::uint64_t(piece_size));
-    }
+    be::TorrentClient::RequestInfo request;
+    request.server_port = 6882;
+    request.pieces_count = pieces.pieces_count_;
+    request.downloaded_pieces = pieces.downloaded_pieces_count_;
+    request.uploaded_pieces = 0;
 
     be::TrackerResponse tracker;
-
     { // Get the info from the tracker first.
         asio::io_context io_context(1);
         asio::co_spawn(io_context
             , [&]() -> asio::awaitable<void>
             {
-                auto data = co_await client.request_torrent_peers(io_context);
+                auto data = co_await client.request_torrent_peers(io_context, request);
                 assert(data);
                 tracker = std::move(data.value());
                 co_return;
@@ -331,29 +320,77 @@ int main()
         peers.emplace_back(io_context);
     }
 
-    Pieces pieces;
-    pieces.pieces_count_ = client.get_pieces_count();
-    pieces.piece_size_ = client.get_piece_size_bytes();
-    pieces.total_size_ = client.get_total_size_bytes();
-
-    _x_total_bytes_ = pieces.total_size_;
-    _x_total_pieces_ = pieces.pieces_count_;
-    _x_active_peers_ = std::uint32_t(tracker_info->peers_.size());
-    _x_total_peers_ = _x_active_peers_;
-
-    std::default_random_engine rng{random()};
-    std::shuffle(std::begin(tracker_info->peers_), std::end(tracker_info->peers_), rng);
-
     for (std::size_t i = 0, count = tracker_info->peers_.size(); i < count; ++i)
     {
         asio::co_spawn(io_context
             , DownloadFromPeer(io_context, client, tracker_info->peers_[i], pieces, peers[i])
-            , [](std::exception_ptr, bool)
-        {
-            --_x_active_peers_;
-        });
+            , asio::detached);
     }
 
     io_context.run();
+}
+
+void WriteAllPiecesToFile(const std::vector<PiecesToDownload::PieceState>& pieces, const char* output_file)
+{
+#if (_MSC_VER)
+    FILE* f = nullptr;
+    const errno_t e = fopen_s(&f, output_file, "wb");
+    (void)e;
+#else
+    FILE* const f = fopen(output_file, "wb");
+#endif
+    if (!f)
+    {
+        return;
+    }
+    SCOPE_EXIT{(void)fclose(f);};
+
+    for (const auto& state : pieces)
+    {
+        assert(state.data_.size() > 0);
+        const size_t written = fwrite(&state.data_[0], 1, state.data_.size(), f);
+        assert(written == state.data_.size());
+    }
+}
+
+int main()
+{
+    const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
+    const char* const output_file = R"(K:\torrent.iso)";
+
+    std::random_device random;
+    auto client = be::TorrentClient::make(torrent_file, random);
+    assert(client);
+    auto& client_ref = client.value();
+
+    PiecesToDownload pieces;
+    using PieceState = PiecesToDownload::PieceState;
+    pieces.pieces_count_ = client_ref.get_pieces_count();
+    pieces.piece_size_ = client_ref.get_piece_size_bytes();
+    pieces.total_size_ = client_ref.get_total_size_bytes();
+    pieces.downloaded_pieces_count_ = 0;
+    pieces.next_piece_index_ = 0;
+
+    std::vector<PieceState> downloaded_data;
+    pieces.on_new_piece = [&](PieceState& piece)
+    {
+        downloaded_data.push_back(std::move(piece));
+    };
+
+    while (pieces.downloaded_pieces_count_ < pieces.pieces_count_)
+    {
+        DoOneTrackerRound(client_ref, pieces);
+    }
+    assert(pieces.downloaded_pieces_count_ == pieces.pieces_count_);
+    assert(pieces.pieces_.empty());
+    assert(pieces.to_retry_.empty());
+    assert(downloaded_data.size() == client_ref.get_pieces_count());
+
+    std::sort(downloaded_data.begin(), downloaded_data.end()
+        , [](const PieceState& lhs, const PieceState& rhs)
+        {
+            return (lhs.piece_index_ < rhs.piece_index_);
+        });
+    WriteAllPiecesToFile(downloaded_data, output_file);
     return 0;
 }

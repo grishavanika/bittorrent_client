@@ -10,6 +10,7 @@
 #include <url.hpp>
 
 #include <cstring>
+#include <cassert>
 
 namespace be
 {
@@ -100,18 +101,27 @@ namespace be
             , torrent.info_position_.start_
             , torrent.info_position_.end_));
         client.peer_id_ = GetRandomPeerId(random);
+
+        {   // Validate that total size and piece size together
+            // with pieces count all do make sense together.
+            const std::uint32_t pieces_count = client.get_pieces_count();
+            const std::uint32_t piece_size = client.get_piece_size_bytes();
+            const std::uint64_t total_size = client.get_total_size_bytes();
+            assert(pieces_count > 0);
+            assert(piece_size > 0);
+            const std::uint64_t size_except_last_piece =
+                (std::uint64_t(piece_size) * std::uint64_t((pieces_count - 1)));
+            assert(size_except_last_piece < total_size);
+            const std::uint64_t last = (total_size - size_except_last_piece);
+            assert(last <= std::uint64_t(piece_size));
+        }
         return client;
     }
 
-    auto TorrentClient::get_tracker_request_info(
-        std::uint16_t server_port /*= 6882*/) const
+    auto TorrentClient::get_tracker_request_info(const RequestInfo& request) const
             -> outcome::result<HTTPTrackerRequest>
     {
-        const std::size_t pieces = get_pieces_count();
-        const std::size_t uploaded_pieces = 0;
-        const std::size_t downloaded_pieces = 0;
         const std::size_t do_compact_response = 1;
-
         // Url lib uses exceptions for errors. We want to
         // return nullopt.
         try
@@ -119,10 +129,10 @@ namespace be
             Url url(metainfo_.tracker_url_utf8_);
             url.add_query("info_hash",   AsString(info_hash_))
                 .add_query("peer_id",    AsString(peer_id_))
-                .add_query("port",       std::to_string(server_port))
-                .add_query("uploaded",   std::to_string(uploaded_pieces))
-                .add_query("downloaded", std::to_string(downloaded_pieces))
-                .add_query("left",       std::to_string(pieces))
+                .add_query("port",       std::to_string(request.server_port))
+                .add_query("uploaded",   std::to_string(request.uploaded_pieces))
+                .add_query("downloaded", std::to_string(request.downloaded_pieces))
+                .add_query("left",       std::to_string(request.pieces_count))
                 .add_query("compact",    std::to_string(do_compact_response));
             return TryBuildHTTPTrackerRequest(url);
         }
@@ -131,9 +141,10 @@ namespace be
     }
 
     asio::awaitable<outcome::result<be::TrackerResponse>>
-        TorrentClient::request_torrent_peers(asio::io_context& io_context)
+        TorrentClient::request_torrent_peers(asio::io_context& io_context
+            , const RequestInfo& request)
     {
-        OUTCOME_CO_TRY(http, get_tracker_request_info());
+        OUTCOME_CO_TRY(http, get_tracker_request_info(request));
         OUTCOME_CO_TRY(body, co_await HTTP_GET(io_context
             , http.host_, http.get_uri_, http.port_));
         co_return be::ParseTrackerCompactResponseContent(body);

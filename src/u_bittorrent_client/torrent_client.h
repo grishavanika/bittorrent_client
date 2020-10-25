@@ -42,11 +42,19 @@ namespace be
             std::string get_uri_;
         };
 
+        struct RequestInfo
+        {
+            std::uint16_t server_port = 0;
+            std::uint32_t pieces_count = 0;
+            std::uint32_t uploaded_pieces = 0;
+            std::uint32_t downloaded_pieces = 0;
+        };
+
         outcome::result<HTTPTrackerRequest> get_tracker_request_info(
-            std::uint16_t server_port = 6882) const;
+            const RequestInfo& request) const;
 
         asio::awaitable<outcome::result<be::TrackerResponse>>
-            request_torrent_peers(asio::io_context& io_context);
+            request_torrent_peers(asio::io_context& io_context, const RequestInfo& request);
 
         std::uint32_t get_pieces_count() const;
         std::uint64_t get_total_size_bytes() const;
