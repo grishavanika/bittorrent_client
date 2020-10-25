@@ -164,13 +164,17 @@ namespace be
         {
             return *single_file;
         }
-        std::uint64_t total = 0;
-        const auto& files = std::get<std::vector<TorrentMetainfo::File>>(data);
-        for (const TorrentMetainfo::File& f : files)
+        else if (const auto* multi_files
+            = std::get_if<std::vector<TorrentMetainfo::File>>(&data))
         {
-            total += f.length_bytes_;
+            std::uint64_t total = 0;
+            for (const TorrentMetainfo::File& f : *multi_files)
+            {
+                total += f.length_bytes_;
+            }
         }
-        return total;
+        assert(false && "Invalid torrent metainfo.");
+        return 0;
     }
 
     std::uint32_t TorrentClient::get_piece_size_bytes() const

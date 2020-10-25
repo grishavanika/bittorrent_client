@@ -29,6 +29,12 @@ const std::uint32_t k_max_block = 16'384;
 // How much Request(s) send before reading the piece.
 const int k_max_backlog = 5;
 
+template <typename... Ts>
+struct overload : Ts... { using Ts::operator()...; };
+
+template <typename... Ts>
+overload(Ts...) -> overload<Ts...>;
+
 // Stupid and simple algorithm to distribute
 // N pieces needed to download, sequentially.
 struct PiecesToDownload
@@ -38,7 +44,7 @@ struct PiecesToDownload
         std::uint32_t piece_index_ = 0;
         std::uint32_t downloaded_ = 0;
         std::uint32_t requested_ = 0;
-
+        PieceState(std::uint32_t index) : piece_index_(index) {}
         std::vector<std::uint8_t> data_;
     };
 
@@ -71,20 +77,14 @@ struct PiecesToDownload
     {
         if (next_piece_index_ < pieces_count_)
         {
-            const std::uint32_t piece_index = next_piece_index_++;
-            pieces_.push_back({});
-            PieceState* piece = &pieces_.back();
-            piece->piece_index_ = piece_index;
-            piece->downloaded_ = 0;
-            piece->requested_ = 0;
-
+            (void)pieces_.emplace_back(next_piece_index_++);
             // We don't check `have_pieces` for a reason:
-            // let's caller decide if it needs to retry or stop
-            // connection.
+            // let's the caller decide if it needs to retry or stop connection.
             auto handle = pieces_.end();
             --handle; // to the last element
             return handle;
         }
+
         if (to_retry_.empty())
         {
             return pieces_.end();
@@ -179,76 +179,31 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
 
             auto m_any = co_await be::ReadAnyMessage(peer.socket_);
             if (!m_any) { co_return false; }
-            be::AnyMessage& m = m_any.value();
-            switch (m.index())
-            {
-            case 1/*Message_Choke*/:
-                peer.unchocked_ = false;
-                break;
-            case 2/*Message_Unchoke*/:
-                peer.unchocked_ = true;
-                break;
-            case 3/*Message_Interested*/:
-                // not implemented
-                assert(false && "Message_Interested: not implemented");
-                break;
-            case 4/*Message_NotInterested*/:
-                // not implemented
-                assert(false && "Message_NotInterested: not implemented");
-                break;
-            case 5/*Message_Have*/:
-            {
-                const auto& have = std::get<be::Message_Have>(m);
-                if (!peer.bitfield_.set_piece(have.piece_index_))
+
+            std::visit(overload{
+                  [ ](be::Message_KeepAlive&) { }
+                , [&](be::Message_Choke&)     { peer.unchocked_ = false; }
+                , [&](be::Message_Unchoke&)   { peer.unchocked_ = true; }
+                , [&](be::Message_Have& have) { (void)peer.bitfield_.set_piece(have.piece_index_); }
+                , [&](be::Message_Piece& msg_piece)
                 {
-                    assert(false && "Failed to set HAVE piece");
-                    // Non-critical, continue.
+                    --backlog;
+
+                    const std::uint32_t data_size = msg_piece.size();
+                    assert((msg_piece.piece_index_ == piece->piece_index_)
+                        && "Mixed order of pieces");
+                    assert((data_size > 0) && "Piece with zero size");
+                    assert((msg_piece.piece_begin_ == piece->downloaded_)
+                        && "Out of order piece with wrong offset");
+                    piece->downloaded_ += data_size;
+                    assert((piece->downloaded_ <= piece_size)
+                        && "Downloaded more then piece has in size");
+                    const std::size_t prev = piece->data_.size();
+                    piece->data_.resize(prev + data_size);
+                    std::memcpy(&piece->data_[prev], msg_piece.data(), data_size);
                 }
-                break;
-            }
-            case 6/*Message_Bitfield*/:
-                // not possible
-                assert(false && "Bitfield should be received only once, at the beginning");
-                break;
-            case 7/*Message_Request*/:
-                // not implemented
-                assert(false && "Message_Request: not implemented");
-                break;
-            case 8/*Message_Piece*/:
-            {
-                auto& msg = std::get<be::Message_Piece>(m);
-
-                const std::uint32_t count = msg.size();
-                assert((msg.piece_index_ == piece->piece_index_)
-                    && "Mixed order of pieces");
-                assert((count > 0) && "Piece with zero size");
-                assert((msg.piece_begin_ == piece->downloaded_)
-                    && "Out of order piece with wrong offset");
-                piece->downloaded_ += count;
-                assert((piece->downloaded_ <= piece_size)
-                    && "Downloaded more then piece has in size");
-
-                const std::size_t prev = piece->data_.size();
-                piece->data_.resize(prev + count);
-                std::memcpy(&piece->data_[prev], msg.data(), count);
-
-                --backlog;
-                break;
-            }
-            case 9/*Message_Cancel*/:
-                // not implemented
-                assert(false && "Message_Cancel: not implemented");
-                break;
-            case 10/*Message_KeepAlive*/:
-                // do nothing
-                break;
-            case 11/*Message_Unknown*/:
-                // ignore
-                break;
-            default: /*not possible, should be Message_Unknown*/
-                assert(false);
-                break;
-            }
+                , [](auto&) { assert(false && "Unhandled message from peer"); }
+                }, m_any.value());
         }
         
         assert(piece->downloaded_ == piece_size);
@@ -268,7 +223,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
 asio::awaitable<bool> DownloadFromPeer(
     asio::io_context& io_context
     , const be::TorrentClient& client
-    , const be::PeerAddress& address
+    , be::PeerAddress address
     , PiecesToDownload& pieces
     , be::TorrentPeer& peer)
 {
@@ -316,6 +271,7 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
+    peers.reserve(tracker_info->peers_.size());
     for (auto address : tracker_info->peers_)
     {
         peers.emplace_back(io_context);
@@ -336,10 +292,7 @@ void WriteAllPiecesToFile(const std::vector<PiecesToDownload::PieceState>& piece
 #else
     FILE* const f = fopen(output_file, "wb");
 #endif
-    if (!f)
-    {
-        return;
-    }
+    assert(f);
     SCOPE_EXIT{(void)fclose(f);};
 
     for (const auto& state : pieces)
@@ -382,6 +335,9 @@ int main()
     assert(pieces.pieces_.empty());
     assert(pieces.to_retry_.empty());
     assert(downloaded_data.size() == client_ref.get_pieces_count());
+
+    assert(std::get<std::uint64_t>(client_ref.metainfo_.info_.length_or_files_)
+        && "Temporary code for writing to file assumes single-file torrent.");
 
     std::sort(downloaded_data.begin(), downloaded_data.end()
         , [](const PieceState& lhs, const PieceState& rhs)
