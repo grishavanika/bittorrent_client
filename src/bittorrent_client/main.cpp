@@ -126,7 +126,7 @@ struct PiecesToDownload
     }
 };
 
-asio::awaitable<bool> TryDownloadPiecesFromPeer(
+asio::awaitable<outcome::result<void>> TryDownloadPiecesFromPeer(
     be::TorrentPeer& peer, PiecesToDownload& pieces)
 {
     // Mostly from https://blog.jse.li/posts/torrent/.
@@ -137,7 +137,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         if (piece == pieces.pieces_.end())
         {
             // We stop and terminate connection.
-            co_return false;
+            co_return outcome::failure(ClientErrorc::TODO);
         }
         // Put back to the queue on early out or
         // coroutine exit.
@@ -169,16 +169,14 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
                     request.piece_index_ = piece->piece_index_;
                     request.offset_ = piece->requested_;
                     request.length_ = block_size;
-                    auto sent = co_await SendMessage(peer.socket_, request);
-                    if (!sent) { co_return false; }
+                    OUTCOME_CO_TRY(co_await SendMessage(peer.socket_, request));
                     
                     ++backlog;
                     piece->requested_ += block_size;
                 }
             }
 
-            auto m_any = co_await be::ReadAnyMessage(peer.socket_);
-            if (!m_any) { co_return false; }
+            OUTCOME_CO_TRY(msg, co_await be::ReadAnyMessage(peer.socket_));
 
             std::visit(overload{
                   [ ](be::Message_KeepAlive&) { }
@@ -203,7 +201,7 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
                     std::memcpy(&piece->data_[prev], msg_piece.data(), data_size);
                 }
                 , [](auto&) { assert(false && "Unhandled message from peer"); }
-                }, m_any.value());
+                }, msg);
         }
         
         assert(piece->downloaded_ == piece_size);
@@ -215,30 +213,27 @@ asio::awaitable<bool> TryDownloadPiecesFromPeer(
         // # UUU: validate and retry on hash mismatch.
         be::Message_Have have;
         have.piece_index_ = piece_index;
-        auto sent = co_await SendMessage(peer.socket_, have);
-        if (!sent) { co_return false; }
+        OUTCOME_CO_TRY(co_await SendMessage(peer.socket_, have));
     }
 }
 
-asio::awaitable<bool> DownloadFromPeer(
+// Can't use outcome::result<void> because ASIO needs
+// return type to be default constructible if used
+// in asio::co_spawn().
+asio::awaitable<std::error_code> DownloadFromPeer(
     asio::io_context& io_context
     , const be::TorrentClient& client
     , be::PeerAddress address
     , PiecesToDownload& pieces
     , be::TorrentPeer& peer)
 {
-    auto started = co_await peer.start(address, client.info_hash_, client.peer_id_);
-    if (!started) { co_return false; }
-    auto bitfield = co_await be::ReadMessage<be::Message_Bitfield>(peer.socket_);
-    if (!bitfield) { co_return false; }
-    peer.bitfield_ = std::move(bitfield.value());
-
-    auto sent = co_await be::SendMessage(peer.socket_, be::Message_Unchoke());
-    if (!sent) { co_return false; }
-    sent = co_await be::SendMessage(peer.socket_, be::Message_Interested());
-    if (!sent) { co_return false; }
-
-    co_return co_await TryDownloadPiecesFromPeer(peer, pieces);
+    OUTCOME_CO_TRY_ERR(co_await peer.start(address, client.info_hash_, client.peer_id_));
+    OUTCOME_CO_TRY_ERRV(bitfield, co_await be::ReadMessage<be::Message_Bitfield>(peer.socket_));
+    peer.bitfield_ = std::move(bitfield);
+    OUTCOME_CO_TRY_ERR(co_await be::SendMessage(peer.socket_, be::Message_Unchoke()));
+    OUTCOME_CO_TRY_ERR(co_await be::SendMessage(peer.socket_, be::Message_Interested()));
+    OUTCOME_CO_TRY_ERR(co_await TryDownloadPiecesFromPeer(peer, pieces));
+    co_return ClientErrorc::Ok;
 }
 
 void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
