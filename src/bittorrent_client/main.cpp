@@ -298,6 +298,129 @@ void WriteAllPiecesToFile(const std::vector<PiecesToDownload::PieceState>& piece
     }
 }
 
+struct FileOffset
+{
+    std::uint64_t start = 0;
+    std::uint64_t end = 0;
+    std::size_t file_index = 0;
+};
+
+struct FilesList
+{
+    const be::TorrentClient* torrent_;
+    std::vector<FileOffset> files_offset_;
+
+    static FilesList make(const be::TorrentClient& torrent)
+    {
+        using LengthOrFiles = be::TorrentMetainfo::LengthOrFiles;
+        using File = be::TorrentMetainfo::File;
+        const LengthOrFiles& data = torrent.metainfo_.info_.length_or_files_;
+
+        FilesList list;
+        list.torrent_ = &torrent;
+        if (const std::uint64_t* single_file = std::get_if<std::uint64_t>(&data))
+        {
+            list.files_offset_.push_back({});
+            FileOffset& offset = list.files_offset_.back();
+            offset.file_index = 0;
+            offset.start = 0;
+            offset.end = *single_file;
+        }
+        else if (const auto* multi_files
+            = std::get_if<std::vector<File>>(&data))
+        {
+            list.files_offset_.reserve(multi_files->size());
+            FileOffset fo;
+            fo.start = 0;
+            for (std::size_t index = 0, count = multi_files->size(); index < count; ++index)
+            {
+                const File& file = (*multi_files)[index];
+                fo.end = fo.start + file.length_bytes_;
+                fo.file_index = index;
+                list.files_offset_.push_back(fo);
+                fo.start = fo.end;
+            }
+        }
+        else
+        {
+            assert(false && "Invalid torrent metainfo.");
+        }
+        assert(list.files_offset_.size() > 0);
+        assert(list.files_offset_.back().end == torrent.get_total_size_bytes());
+        return list;
+    }
+
+    // F(std::size_t file_index, const std::string& file_name
+    //    , std::uint64_t file_offset, std::uint64_t bytes_count
+    //    , std::uint64_t offset)
+    template<typename F>
+    void iterate_files(std::uint64_t start_bytes, std::uint64_t end_bytes, F f) const
+    {
+        assert(end_bytes > start_bytes);
+        assert(files_offset_.size() > 0);
+
+        auto end = files_offset_.end();
+        auto it_start = std::lower_bound(files_offset_.begin(), end, start_bytes
+            , [](const FileOffset& lhs, std::uint64_t rhs)
+            {
+                return (lhs.start < rhs);
+            });
+        if (it_start == end)
+        {
+            it_start = (end - 1);
+        }
+        if (it_start->start > start_bytes)
+        {
+            --it_start;
+        }
+        assert((start_bytes >= it_start->start)
+            && (start_bytes < it_start->end));
+
+        auto it_end = std::lower_bound(it_start, end, end_bytes
+            , [](const FileOffset& lhs, std::uint64_t rhs)
+            {
+                return (lhs.end < rhs);
+            });
+        assert(it_end != end);
+        assert(it_end >= it_start);
+        assert((end_bytes > it_end->start)
+            && (end_bytes <= it_end->end));
+
+        using File = be::TorrentMetainfo::File;
+        const auto* files = std::get_if<std::vector<File>>(
+            &torrent_->metainfo_.info_.length_or_files_);
+
+        std::uint64_t data_offset = 0;
+        for (auto it = it_start; it != (it_end + 1); ++it)
+        {
+            const FileOffset& offset = *it;
+            const std::string& file_name = files
+                ? (*files)[offset.file_index].path_utf8_
+                : torrent_->metainfo_.info_.suggested_name_utf8_;
+
+            const std::uint64_t start = (start_bytes > offset.start)
+                ? start_bytes : offset.start;
+            const std::uint64_t file_start = (start - offset.start);
+            const std::uint64_t file_length = (std::min(offset.end, end_bytes) - start);
+
+            f(offset.file_index, file_name, file_start, file_length, data_offset);
+            data_offset += file_length;
+        }
+        assert(data_offset == (end_bytes - start_bytes));
+    }
+
+    template<typename F>
+    void iterate_files(std::uint32_t piece_index, F f)
+    {
+        assert(files_offset_.size() > 0);
+        const std::uint64_t total_size = files_offset_.back().end;
+        const std::uint64_t start = piece_index * torrent_->get_piece_size_bytes();
+        std::uint64_t end = (piece_index + 1) * torrent_->get_piece_size_bytes();
+        end = std::min(end, total_size);
+        iterate_files(start, end, std::move(f));
+    }
+};
+
 int main()
 {
     //const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
@@ -308,6 +431,8 @@ int main()
     auto client = be::TorrentClient::make(torrent_file, random);
     assert(client);
     auto& client_ref = client.value();
+    auto files_list = FilesList::make(client_ref);
+    (void)files_list;
 
     PiecesToDownload pieces;
     using PieceState = PiecesToDownload::PieceState;

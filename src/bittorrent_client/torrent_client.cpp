@@ -163,7 +163,6 @@ namespace be
     std::uint64_t TorrentClient::get_total_size_bytes() const
     {
         const TorrentMetainfo::LengthOrFiles& data = metainfo_.info_.length_or_files_;
-        assert(data.index() != 0);
 
         if (const std::uint64_t* single_file = std::get_if<std::uint64_t>(&data))
         {
@@ -177,6 +176,7 @@ namespace be
             {
                 total += f.length_bytes_;
             }
+            return total;
         }
         assert(false && "Invalid torrent metainfo.");
         return 0;
