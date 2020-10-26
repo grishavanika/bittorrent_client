@@ -1,4 +1,4 @@
-set(exe_name u_bittorrent_client)
+set(exe_name bittorrent_client)
 
 target_collect_sources(${exe_name})
 

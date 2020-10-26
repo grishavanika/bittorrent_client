@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12.4 FATAL_ERROR)
 # 3.12.4 is required because of C++20 support.
-project(bencoding)
+project(bittorrent_client)
 
 # For proper work of CMAKE_EXPORT_COMPILE_COMMANDS.
 set(CMAKE_C_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
