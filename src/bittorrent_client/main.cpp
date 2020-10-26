@@ -278,31 +278,21 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
     io_context.run();
 }
 
-void WriteAllPiecesToFile(const std::vector<PiecesToDownload::PieceState>& pieces, const char* output_file)
-{
-#if (_MSC_VER)
-    FILE* f = nullptr;
-    const errno_t e = fopen_s(&f, output_file, "wb");
-    (void)e;
-#else
-    FILE* const f = fopen(output_file, "wb");
-#endif
-    assert(f);
-    SCOPE_EXIT{(void)fclose(f);};
-
-    for (const auto& state : pieces)
-    {
-        assert(state.data_.size() > 0);
-        const size_t written = fwrite(&state.data_[0], 1, state.data_.size(), f);
-        assert(written == state.data_.size());
-    }
-}
-
 struct FileOffset
 {
     std::uint64_t start = 0;
     std::uint64_t end = 0;
     std::size_t file_index = 0;
+};
+
+struct FilePiece
+{
+    std::size_t file_index_;
+    const std::string* file_name_ = nullptr;
+    std::uint64_t file_offset_ = 0;
+    std::uint64_t bytes_count_ = 0;
+    std::uint64_t piece_offset_ = 0;
+    std::uint64_t file_size_ = 0;
 };
 
 struct FilesList
@@ -350,9 +340,7 @@ struct FilesList
         return list;
     }
 
-    // F(std::size_t file_index, const std::string& file_name
-    //    , std::uint64_t file_offset, std::uint64_t bytes_count
-    //    , std::uint64_t offset)
+    // F(const FilePiece& file_piece)
     template<typename F>
     void iterate_files(std::uint64_t start_bytes, std::uint64_t end_bytes, F f) const
     {
@@ -361,28 +349,35 @@ struct FilesList
 
         auto end = files_offset_.end();
         auto it_start = std::lower_bound(files_offset_.begin(), end, start_bytes
-            , [](const FileOffset& lhs, std::uint64_t rhs)
-            {
-                return (lhs.start < rhs);
-            });
+            , [](const FileOffset& lhs, std::uint64_t rhs) { return (lhs.start < rhs); });
         if (it_start == end)
         {
+            // File with start >= start_bytes. Must be the last one.
             it_start = (end - 1);
         }
         if (it_start->start > start_bytes)
         {
+            // Found the file with start > start_bytes.
+            // File that has start < start_bytes is previous one.
             --it_start;
         }
+        // start_bytes should be in file's [start; end).
         assert((start_bytes >= it_start->start)
             && (start_bytes < it_start->end));
 
+        // Find the file where the end_bytes is. It starts from
+        // already found it_start file for sure.
         auto it_end = std::lower_bound(it_start, end, end_bytes
             , [](const FileOffset& lhs, std::uint64_t rhs)
             {
                 return (lhs.end < rhs);
             });
+        // There is always file with end >= end_bytes.
+        // Otherwise caller tries to write past the end of the file.
         assert(it_end != end);
+        // Either the same or next file(s).
         assert(it_end >= it_start);
+        // end_bytes should be in file's (start; end].
         assert((end_bytes > it_end->start)
             && (end_bytes <= it_end->end));
 
@@ -391,26 +386,39 @@ struct FilesList
             &torrent_->metainfo_.info_.length_or_files_);
 
         std::uint64_t data_offset = 0;
+        // Iterate thru all files that overlap with [start_bytes; end_bytes].
         for (auto it = it_start; it != (it_end + 1); ++it)
         {
-            const FileOffset& offset = *it;
+            const FileOffset& fo = *it;
             const std::string& file_name = files
-                ? (*files)[offset.file_index].path_utf8_
+                ? (*files)[fo.file_index].path_utf8_
                 : torrent_->metainfo_.info_.suggested_name_utf8_;
+            const std::uint64_t file_size = files
+                ? (*files)[fo.file_index].length_bytes_
+                : files_offset_[0].end; // we know we have single file.
 
-            const std::uint64_t start = (start_bytes > offset.start)
-                ? start_bytes : offset.start;
-            const std::uint64_t file_start = (start - offset.start);
-            const std::uint64_t file_length = (std::min(offset.end, end_bytes) - start);
+            const std::uint64_t start_offset = std::max(start_bytes, fo.start);
+            const std::uint64_t end_offset = std::min(fo.end, end_bytes);
 
-            f(offset.file_index, file_name, file_start, file_length, data_offset);
-            data_offset += file_length;
+            FilePiece piece;
+            piece.file_index_ = fo.file_index;
+            piece.file_name_ = &file_name;
+            piece.file_offset_ = (start_offset - fo.start);
+            piece.bytes_count_ = (end_offset - start_offset);
+            piece.piece_offset_ = data_offset;
+            piece.file_size_ = file_size;
+
+            f(piece);
+            // Consumed part of the input range.
+            data_offset += piece.bytes_count_;
         }
+        // We should consume all the range passed.
         assert(data_offset == (end_bytes - start_bytes));
     }
 
+    // F(const FilePiece& file_piece)
     template<typename F>
-    void iterate_files(std::uint32_t piece_index, F f)
+    void iterate_files(std::uint32_t piece_index, F f) const
     {
         assert(files_offset_.size() > 0);
         const std::uint64_t total_size = files_offset_.back().end;
@@ -421,50 +429,165 @@ struct FilesList
     }
 };
 
+#include <Windows.h>
+
+struct PhysicalFile
+{
+    HANDLE file_ = INVALID_HANDLE_VALUE;
+    std::uint64_t written_ = 0;
+
+    PhysicalFile() = default;
+    PhysicalFile(const PhysicalFile&) = delete;
+    PhysicalFile& operator=(const PhysicalFile&) = delete;
+    PhysicalFile(PhysicalFile&& rhs) noexcept
+        : file_(std::exchange(rhs.file_, INVALID_HANDLE_VALUE))
+        , written_(0)
+    {
+    }
+    PhysicalFile& operator=(PhysicalFile&& rhs)
+    {
+        if (this != &rhs)
+        {
+            close();
+            file_ = std::exchange(rhs.file_, INVALID_HANDLE_VALUE);
+        }
+        return *this;
+    }
+    ~PhysicalFile()
+    {
+        close();
+    }
+    void close()
+    {
+        if (file_ != INVALID_HANDLE_VALUE)
+        {
+            (void)::CloseHandle(file_);
+            file_ = INVALID_HANDLE_VALUE;
+        }
+    }
+
+    void try_create(const std::string& name, std::uint64_t final_size)
+    {
+        if (file_ != INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+        file_ = ::CreateFileA(name.c_str()
+            , GENERIC_WRITE
+            , 0 // do not share with anyone
+            , nullptr
+            , CREATE_NEW // fail if already exists
+            , FILE_ATTRIBUTE_NORMAL
+            , nullptr);
+        assert(file_);
+        LARGE_INTEGER size{};
+        size.QuadPart = static_cast<LONGLONG>(final_size);
+        BOOL ok = ::SetFilePointerEx(file_, size, nullptr, FILE_BEGIN);
+        assert(ok);
+        ok = ::SetEndOfFile(file_);
+        assert(ok);
+    }
+
+    void write(const void* data, std::uint64_t offset, std::uint32_t size)
+    {
+        LARGE_INTEGER li{};
+        li.QuadPart = static_cast<LONGLONG>(offset);
+        BOOL ok = ::SetFilePointerEx(file_, li, nullptr, FILE_BEGIN);
+        assert(ok);
+
+        DWORD written = 0;
+        ok = ::WriteFile(file_, data, size, &written, nullptr);
+        assert(ok);
+        assert(written == size);
+        written_ += size;
+    }
+
+    void try_finalize(std::uint64_t final_size)
+    {
+        assert(written_ <= final_size);
+        if (written_ == final_size)
+        {
+            close();
+        }
+    }
+};
+
+struct FilesOnDisk
+{
+    std::vector<PhysicalFile> files_;
+    const FilesList* files_list_;
+
+    FilesOnDisk(const FilesList& files_list)
+        : files_()
+        , files_list_(&files_list)
+    {
+        files_.resize(files_list_->files_offset_.size());
+    }
+
+    void write_piece(PiecesToDownload::PieceState& piece)
+    {
+        assert(piece.data_.size() > 0);
+        files_list_->iterate_files(piece.piece_index_
+            , [this, &piece](const FilePiece& file_piece)
+        {
+            on_write_file_piece(file_piece, &piece.data_[0], piece.data_.size());
+        });
+        piece.data_ = {};
+    }
+
+    void on_write_file_piece(const FilePiece& piece
+        , const std::uint8_t* all_data, std::size_t data_size)
+    {
+        assert(piece.file_index_ < files_.size());
+        assert(piece.piece_offset_ < data_size);
+        assert(piece.bytes_count_ > 0);
+        PhysicalFile& f = files_[piece.file_index_];
+        f.try_create(*piece.file_name_, piece.file_size_);
+        f.write(all_data + piece.piece_offset_
+            , piece.file_offset_
+            , std::uint32_t(piece.bytes_count_));
+        f.try_finalize(piece.file_size_);
+    }
+
+    std::uint64_t total_written() const
+    {
+        std::uint64_t total = 0;
+        for (const PhysicalFile& f : files_)
+        {
+            total += f.written_;
+        }
+        return total;
+    }
+};
+
 int main()
 {
     //const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
     const char* const torrent_file = R"(K:\lubuntu-20.10-desktop-amd64.iso.torrent)";
-    const char* const output_file = R"(K:\torrent.iso)";
 
     std::random_device random;
     auto client = be::TorrentClient::make(torrent_file, random);
     assert(client);
     auto& client_ref = client.value();
     auto files_list = FilesList::make(client_ref);
-    (void)files_list;
+    auto files_on_disk = FilesOnDisk(files_list);
 
     PiecesToDownload pieces;
-    using PieceState = PiecesToDownload::PieceState;
     pieces.pieces_count_ = client_ref.get_pieces_count();
     pieces.piece_size_ = client_ref.get_piece_size_bytes();
     pieces.total_size_ = client_ref.get_total_size_bytes();
     pieces.downloaded_pieces_count_ = 0;
     pieces.next_piece_index_ = 0;
-
-    std::vector<PieceState> downloaded_data;
-    pieces.on_new_piece = [&](PieceState& piece)
-    {
-        downloaded_data.push_back(std::move(piece));
-    };
+    pieces.on_new_piece = std::bind(&FilesOnDisk::write_piece, &files_on_disk, std::placeholders::_1);
 
     while (pieces.downloaded_pieces_count_ < pieces.pieces_count_)
     {
         DoOneTrackerRound(client_ref, pieces);
     }
+
     assert(pieces.downloaded_pieces_count_ == pieces.pieces_count_);
     assert(pieces.pieces_.empty());
     assert(pieces.to_retry_.empty());
-    assert(downloaded_data.size() == client_ref.get_pieces_count());
-
-    assert(std::get<std::uint64_t>(client_ref.metainfo_.info_.length_or_files_)
-        && "Temporary code for writing to file assumes single-file torrent.");
-
-    std::sort(downloaded_data.begin(), downloaded_data.end()
-        , [](const PieceState& lhs, const PieceState& rhs)
-        {
-            return (lhs.piece_index_ < rhs.piece_index_);
-        });
-    WriteAllPiecesToFile(downloaded_data, output_file);
+    assert(files_on_disk.total_written() == pieces.total_size_);
     return 0;
 }
