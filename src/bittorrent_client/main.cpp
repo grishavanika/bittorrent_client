@@ -5,6 +5,7 @@
 #include <bencoding/be_element_ref_parse.h>
 #include <bencoding/be_tracker_response_parse.h>
 #include <small_utils/utils_read_file.h>
+#include <small_utils/utils_experimental.h>
 
 #include <asio.hpp>
 
@@ -28,12 +29,6 @@
 const std::uint32_t k_max_block = 16'384;
 // How much Request(s) send before reading the piece.
 const int k_max_backlog = 5;
-
-template <typename... Ts>
-struct overload : Ts... { using Ts::operator()...; };
-
-template <typename... Ts>
-overload(Ts...) -> overload<Ts...>;
 
 // Stupid and simple algorithm to distribute
 // N pieces needed to download, sequentially.
@@ -240,7 +235,7 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
 {
     be::TorrentClient::RequestInfo request;
     request.server_port = 6882;
-    request.pieces_count = pieces.pieces_count_;
+    request.pieces_left = (pieces.pieces_count_ - pieces.downloaded_pieces_count_);
     request.downloaded_pieces = pieces.downloaded_pieces_count_;
     request.uploaded_pieces = 0;
 
@@ -369,9 +364,7 @@ struct FilesList
         // already found it_start file for sure.
         auto it_end = std::lower_bound(it_start, end, end_bytes
             , [](const FileOffset& lhs, std::uint64_t rhs)
-            {
-                return (lhs.end < rhs);
-            });
+                { return (lhs.end < rhs); });
         // There is always file with end >= end_bytes.
         // Otherwise caller tries to write past the end of the file.
         assert(it_end != end);
@@ -560,10 +553,10 @@ struct FilesOnDisk
     }
 };
 
-int main()
+int main(int argc, char* argv[])
 {
-    //const char* const torrent_file = R"(K:\debian-mac-10.6.0-amd64-netinst.iso.torrent)";
-    const char* const torrent_file = R"(K:\lubuntu-20.10-desktop-amd64.iso.torrent)";
+    assert(argc == 2);
+    const char* torrent_file = argv[1];
 
     std::random_device random;
     auto client = be::TorrentClient::make(torrent_file, random);

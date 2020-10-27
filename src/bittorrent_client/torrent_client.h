@@ -8,6 +8,8 @@
 
 #include <asio.hpp>
 
+class Url;
+
 namespace be
 {
     struct TorrentPeer
@@ -35,23 +37,36 @@ namespace be
             const char* torrent_file_path
             , std::random_device& random);
 
-        struct HTTPTrackerRequest
-        {
-            std::string host_;
-            std::uint16_t port_ = 0;
-            std::string get_uri_;
-            bool use_https_ = false;
-        };
-
         struct RequestInfo
         {
             std::uint16_t server_port = 0;
-            std::uint32_t pieces_count = 0;
+            std::uint32_t pieces_left = 0;
             std::uint32_t uploaded_pieces = 0;
             std::uint32_t downloaded_pieces = 0;
         };
 
-        outcome::result<HTTPTrackerRequest> get_tracker_request_info(
+        struct HTTP_GetRequest
+        {
+            std::string host_;
+            std::uint16_t port_ = 0;
+            std::string get_uri_;
+        };
+
+        struct HTTPS_GetRequest : HTTP_GetRequest {};
+
+        struct UDP_Request : RequestInfo
+        {
+            std::string host_;
+            std::uint16_t port_ = 0;
+        };
+
+        using TrackerRequestInfo =
+            std::variant<std::monostate
+                , HTTP_GetRequest
+                , HTTPS_GetRequest
+                , UDP_Request>;
+
+        outcome::result<TrackerRequestInfo> get_tracker_request_info(
             const RequestInfo& request) const;
 
         asio::awaitable<outcome::result<be::TrackerResponse>>
@@ -61,7 +76,17 @@ namespace be
         std::uint64_t get_total_size_bytes() const;
         std::uint32_t get_piece_size_bytes() const;
 
+    private:
+        template<typename Body>
+        outcome::result<TrackerRequestInfo> build_http_request_info(
+            Url& url, const RequestInfo& request, std::uint16_t default_port) const;
+        outcome::result<TrackerRequestInfo> build_udp_request_info(
+            Url& url, const RequestInfo& request) const;
+        asio::awaitable<outcome::result<be::TrackerResponse>>
+            do_udp_tracker_announce(asio::io_context& io_context, const UDP_Request& request);
+
     public:
+        std::random_device* random_ = nullptr;
         TorrentMetainfo metainfo_;
         SHA1Bytes info_hash_;
         PeerId peer_id_;

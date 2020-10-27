@@ -52,6 +52,8 @@ namespace be
             LengthOrFiles length_or_files_; // 'length' or 'files'.
         };
 
+        // See also "Multitracker Metadata Extension".
+        // https://www.bittorrent.org/beps/bep_0012.html
         std::string tracker_url_utf8_; // 'announce'.
         Info info_; // 'info'.
     };
