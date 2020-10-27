@@ -181,19 +181,20 @@ asio::awaitable<outcome::result<void>> TryDownloadPiecesFromPeer(
                 , [&](be::Message_Piece& msg_piece)
                 {
                     --backlog;
-
+                    if (piece->data_.empty())
+                    {
+                        piece->data_.resize(piece_size);
+                    }
                     const std::uint32_t data_size = msg_piece.size();
                     assert((msg_piece.piece_index_ == piece->piece_index_)
                         && "Mixed order of pieces");
                     assert((data_size > 0) && "Piece with zero size");
-                    assert((msg_piece.piece_begin_ == piece->downloaded_)
-                        && "Out of order piece with wrong offset");
-                    piece->downloaded_ += data_size;
-                    assert((piece->downloaded_ <= piece_size)
+                    assert(((piece->downloaded_ + data_size) <= piece_size)
                         && "Downloaded more then piece has in size");
-                    const std::size_t prev = piece->data_.size();
-                    piece->data_.resize(prev + data_size);
-                    std::memcpy(&piece->data_[prev], msg_piece.data(), data_size);
+                    assert((msg_piece.piece_begin_ + data_size) <= piece_size);
+                    
+                    std::memcpy(&piece->data_[msg_piece.piece_begin_], msg_piece.data(), data_size);
+                    piece->downloaded_ += data_size;
                 }
                 , [](auto&) { assert(false && "Unhandled message from peer"); }
                 }, msg);
