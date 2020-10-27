@@ -1,5 +1,6 @@
 #pragma once
 #include "torrent_messages.h"
+#include "tracker_requests.h"
 #include "client_errors.h"
 
 #include <bencoding/be_torrent_file_parse.h>
@@ -33,62 +34,33 @@ namespace be
 
     struct TorrentClient
     {
-        static outcome::result<TorrentClient> make(
-            const char* torrent_file_path
-            , std::random_device& random);
-
-        struct RequestInfo
-        {
-            std::uint16_t server_port = 0;
-            std::uint32_t pieces_left = 0;
-            std::uint32_t uploaded_pieces = 0;
-            std::uint32_t downloaded_pieces = 0;
-        };
-
-        struct HTTP_GetRequest
-        {
-            std::string host_;
-            std::uint16_t port_ = 0;
-            std::string get_uri_;
-        };
-
-        struct HTTPS_GetRequest : HTTP_GetRequest {};
-
-        struct UDP_Request : RequestInfo
-        {
-            std::string host_;
-            std::uint16_t port_ = 0;
-        };
-
-        using TrackerRequestInfo =
-            std::variant<std::monostate
-                , HTTP_GetRequest
-                , HTTPS_GetRequest
-                , UDP_Request>;
-
-        outcome::result<TrackerRequestInfo> get_tracker_request_info(
-            const RequestInfo& request) const;
-
-        asio::awaitable<outcome::result<be::TrackerResponse>>
-            request_torrent_peers(asio::io_context& io_context, const RequestInfo& request);
-
-        std::uint32_t get_pieces_count() const;
-        std::uint64_t get_total_size_bytes() const;
-        std::uint32_t get_piece_size_bytes() const;
-
-    private:
-        template<typename Body>
-        outcome::result<TrackerRequestInfo> build_http_request_info(
-            Url& url, const RequestInfo& request, std::uint16_t default_port) const;
-        outcome::result<TrackerRequestInfo> build_udp_request_info(
-            Url& url, const RequestInfo& request) const;
-        asio::awaitable<outcome::result<be::TrackerResponse>>
-            do_udp_tracker_announce(asio::io_context& io_context, const UDP_Request& request);
-
     public:
         std::random_device* random_ = nullptr;
         TorrentMetainfo metainfo_;
         SHA1Bytes info_hash_;
         PeerId peer_id_;
+
+    public:
+        static outcome::result<TorrentClient> make(
+            const char* torrent_file_path
+            , std::random_device& random);
+
+        std::uint32_t get_pieces_count() const;
+        std::uint64_t get_total_size_bytes() const;
+        std::uint32_t get_piece_size_bytes() const;
+
+        outcome::result<Tracker::Request> build_tracker_requests(
+            const Tracker::RequestInfo& info) const;
+
+        asio::awaitable<outcome::result<TrackerResponse>>
+            request_torrent_peers(asio::io_context& io_context
+                , const Tracker::RequestInfo& info);
+
+    private:
+        template<typename Body>
+        outcome::result<Tracker::Request> build_http_request(
+            Url& url, const Tracker::RequestInfo& request, std::uint16_t default_port) const;
+        outcome::result<Tracker::Request> build_udp_request(
+            Url& url, const Tracker::RequestInfo& request) const;
     };
 } // namespace be

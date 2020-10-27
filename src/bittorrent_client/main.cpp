@@ -1,5 +1,6 @@
 #include "torrent_client.h"
 #include "torrent_messages.h"
+#include "tracker_requests.h"
 
 #include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/be_element_ref_parse.h>
@@ -30,19 +31,20 @@ const std::uint32_t k_max_block = 16'384;
 // How much Request(s) send before reading the piece.
 const int k_max_backlog = 5;
 
+struct PieceState
+{
+    std::uint32_t piece_index_ = 0;
+    std::uint32_t downloaded_ = 0;
+    std::uint32_t requested_ = 0;
+    std::vector<std::uint8_t> data_;
+
+    PieceState(std::uint32_t index) : piece_index_(index) {}
+};
+
 // Stupid and simple algorithm to distribute
 // N pieces needed to download, sequentially.
 struct PiecesToDownload
 {
-    struct PieceState
-    {
-        std::uint32_t piece_index_ = 0;
-        std::uint32_t downloaded_ = 0;
-        std::uint32_t requested_ = 0;
-        PieceState(std::uint32_t index) : piece_index_(index) {}
-        std::vector<std::uint8_t> data_;
-    };
-
     // list<> so references and iterators are not invalidated.
     // Looks like perfect match for this task.
     std::list<PieceState> pieces_;
@@ -57,69 +59,116 @@ struct PiecesToDownload
     std::uint32_t downloaded_pieces_count_ = 0;
     std::function<void (PieceState&)> on_new_piece;
 
-    std::uint32_t get_piece_size(std::uint32_t piece_index) const
+    std::uint32_t get_piece_size(std::uint32_t piece_index) const;
+    Handle pop_piece_to_download(const be::Message_Bitfield& have_pieces);
+    void push_piece_to_retry(Handle piece);
+    void on_piece_part_receive(Handle piece, be::Message_Piece& msg_piece);
+    void on_piece_downloaded(Handle piece);
+};
+
+struct DebugObserver
+{
+    std::uint64_t total_ = 0;
+    std::uint32_t pieces_count_ = 0;
+    std::uint32_t total_peers_ = 0;
+
+    std::uint64_t received_ = 0;
+    std::uint32_t received_pieces_ = 0;
+    std::uint32_t peers_count_ = 0;
+
+    void OnNewPartReceived(
+        const PieceState& piece
+        , std::uint32_t bytes_received);
+
+    void OnPeersListReceived(const std::vector<be::PeerAddress>& peers);
+    void OnPeerFinished();
+};
+
+DebugObserver debug_;
+
+std::uint32_t PiecesToDownload::get_piece_size(std::uint32_t piece_index) const
+{
+    if (piece_index < (pieces_count_ - 1))
     {
-        if (piece_index < (pieces_count_ - 1))
-        {
-            return piece_size_;
-        }
-        const std::uint64_t size = (piece_size_ * (pieces_count_ - 1));
-        assert(total_size_ > size);
-        return std::uint32_t(total_size_ - size);
+        return piece_size_;
+    }
+    const std::uint64_t size = (piece_size_ * (pieces_count_ - 1));
+    assert(total_size_ > size);
+    return std::uint32_t(total_size_ - size);
+}
+
+auto PiecesToDownload::pop_piece_to_download(
+    const be::Message_Bitfield& have_pieces)
+        -> Handle
+{
+    if (next_piece_index_ < pieces_count_)
+    {
+        (void)pieces_.emplace_back(next_piece_index_++);
+        // We don't check `have_pieces` for a reason:
+        // let's the caller decide if it needs to retry or stop connection.
+        auto handle = pieces_.end();
+        --handle; // to the last element
+        return handle;
     }
 
-    Handle pop_piece_to_download(const be::Message_Bitfield& have_pieces)
+    if (to_retry_.empty())
     {
-        if (next_piece_index_ < pieces_count_)
-        {
-            (void)pieces_.emplace_back(next_piece_index_++);
-            // We don't check `have_pieces` for a reason:
-            // let's the caller decide if it needs to retry or stop connection.
-            auto handle = pieces_.end();
-            --handle; // to the last element
-            return handle;
-        }
-
-        if (to_retry_.empty())
-        {
-            return pieces_.end();
-        }
-
-        for (auto it = to_retry_.begin(); it != to_retry_.end(); ++it)
-        {
-            // Check a caller has a piece.
-            // In case caller does not have **all** retry pieces
-            // we'll return fail to notify the caller there is
-            // no need to try again.
-            if (!have_pieces.has_piece((**it).piece_index_))
-            {
-                continue;
-            }
-            Handle piece = *it;
-            to_retry_.erase(it);
-            return piece;
-        }
         return pieces_.end();
     }
 
-    void push_piece_to_retry(Handle piece)
+    for (auto it = to_retry_.begin(); it != to_retry_.end(); ++it)
     {
-        // Re-download all piece.
-        piece->downloaded_ = 0;
-        piece->requested_ = 0;
-        piece->data_.clear();
-        to_retry_.push_back(piece);
+        // Check a caller has a piece.
+        // In case caller does not have **all** retry pieces
+        // we'll return fail to notify the caller there is
+        // no need to try again.
+        if (!have_pieces.has_piece((**it).piece_index_))
+        {
+            continue;
+        }
+        Handle piece = *it;
+        to_retry_.erase(it);
+        return piece;
     }
+    return pieces_.end();
+}
 
-    void on_piece_downloaded(Handle piece)
+void PiecesToDownload::push_piece_to_retry(Handle piece)
+{
+    // Re-download all piece.
+    piece->downloaded_ = 0;
+    piece->requested_ = 0;
+    piece->data_.clear();
+    to_retry_.push_back(piece);
+}
+
+void PiecesToDownload::on_piece_part_receive(Handle piece, be::Message_Piece& msg_piece)
+{
+    const std::uint32_t piece_size = get_piece_size(piece->piece_index_);
+    if (piece->data_.empty())
     {
-        ++downloaded_pieces_count_;
-        assert(on_new_piece);
-        assert(piece != pieces_.end());
-        on_new_piece(*piece);
-        pieces_.erase(piece);
+        piece->data_.resize(piece_size);
     }
-};
+    const std::uint32_t data_size = msg_piece.size();
+    assert((data_size > 0) && "Piece with zero size");
+    assert(((piece->downloaded_ + data_size) <= piece_size)
+        && "Downloaded more then piece has in size");
+    assert((msg_piece.piece_begin_ + data_size) <= piece_size);
+
+    std::memcpy(&piece->data_[msg_piece.piece_begin_], msg_piece.data(), data_size);
+    piece->downloaded_ += data_size;
+
+    debug_.OnNewPartReceived(*piece, data_size);
+}
+
+void PiecesToDownload::on_piece_downloaded(Handle piece)
+{
+    ++downloaded_pieces_count_;
+    assert(on_new_piece);
+    assert(piece != pieces_.end());
+    on_new_piece(*piece);
+    pieces_.erase(piece);
+}
 
 asio::awaitable<outcome::result<void>> TryDownloadPiecesFromPeer(
     be::TorrentPeer& peer, PiecesToDownload& pieces)
@@ -181,20 +230,9 @@ asio::awaitable<outcome::result<void>> TryDownloadPiecesFromPeer(
                 , [&](be::Message_Piece& msg_piece)
                 {
                     --backlog;
-                    if (piece->data_.empty())
-                    {
-                        piece->data_.resize(piece_size);
-                    }
-                    const std::uint32_t data_size = msg_piece.size();
                     assert((msg_piece.piece_index_ == piece->piece_index_)
                         && "Mixed order of pieces");
-                    assert((data_size > 0) && "Piece with zero size");
-                    assert(((piece->downloaded_ + data_size) <= piece_size)
-                        && "Downloaded more then piece has in size");
-                    assert((msg_piece.piece_begin_ + data_size) <= piece_size);
-                    
-                    std::memcpy(&piece->data_[msg_piece.piece_begin_], msg_piece.data(), data_size);
-                    piece->downloaded_ += data_size;
+                    pieces.on_piece_part_receive(piece, msg_piece);
                 }
                 , [](auto&) { assert(false && "Unhandled message from peer"); }
                 }, msg);
@@ -234,7 +272,7 @@ asio::awaitable<std::error_code> DownloadFromPeer(
 
 void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
 {
-    be::TorrentClient::RequestInfo request;
+    Tracker::RequestInfo request;
     request.server_port = 6882;
     request.pieces_left = (pieces.pieces_count_ - pieces.downloaded_pieces_count_);
     request.downloaded_pieces = pieces.downloaded_pieces_count_;
@@ -259,6 +297,8 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
     auto tracker_info = std::get_if<be::TrackerResponse::OnSuccess>(&tracker.data_);
     assert(tracker_info);
     assert(!tracker_info->peers_.empty());
+
+    debug_.OnPeersListReceived(tracker_info->peers_);
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
@@ -518,7 +558,7 @@ struct FilesOnDisk
         files_.resize(files_list_->files_offset_.size());
     }
 
-    void write_piece(PiecesToDownload::PieceState& piece)
+    void write_piece(PieceState& piece)
     {
         assert(piece.data_.size() > 0);
         files_list_->iterate_files(piece.piece_index_
@@ -554,6 +594,74 @@ struct FilesOnDisk
     }
 };
 
+static std::string PrettyBytes(std::uint64_t bytes)
+{
+    const char* const suffixes[] =
+    {
+        "B",
+        "KB",
+        "MB",
+        "GB",
+        "TB",
+        "PB",
+        "EB",
+    };
+    std::size_t s = 0;
+    double count = double(bytes);
+    while ((count >= 1024) && (s < std::size(suffixes)))
+    {
+        ++s;
+        count /= 1024;
+    }
+    char buf[256];
+    if (count - floor(count) == 0.0)
+    {
+        snprintf(buf, std::size(buf), "%u %s", unsigned(count), suffixes[s]);
+    }
+    else
+    {
+        snprintf(buf, std::size(buf), "%.1f %s", count, suffixes[s]);
+    }
+    return buf;
+}
+
+void DebugObserver::OnNewPartReceived(
+    const PieceState& piece
+    , std::uint32_t bytes_received)
+{
+    received_ += bytes_received;
+    if (piece.downloaded_ == piece.data_.size())
+    {
+        ++received_pieces_;
+    }
+    const double p = (received_ * 100.0) / total_;
+    printf("[%u/%u] [%u] Downloaded %.2f %% (%s/%s). %u peers.\n"
+        , received_pieces_
+        , pieces_count_
+        , piece.piece_index_
+        , p
+        , PrettyBytes(received_).c_str()
+        , PrettyBytes(total_).c_str()
+        , peers_count_);
+}
+
+void DebugObserver::OnPeersListReceived(const std::vector<be::PeerAddress>& peers)
+{
+    total_peers_ = static_cast<std::uint32_t>(peers.size());
+    peers_count_ = total_peers_;
+
+    printf("Received %u peers.\n", total_peers_);
+}
+
+void DebugObserver::OnPeerFinished()
+{
+    assert(peers_count_ > 0);
+    --peers_count_;
+
+    printf("Peer's finish; %u out of %u peers available.\n"
+        , peers_count_, total_peers_);
+}
+
 int main(int argc, char* argv[])
 {
     assert(argc == 2);
@@ -572,7 +680,13 @@ int main(int argc, char* argv[])
     pieces.total_size_ = client_ref.get_total_size_bytes();
     pieces.downloaded_pieces_count_ = 0;
     pieces.next_piece_index_ = 0;
-    pieces.on_new_piece = std::bind(&FilesOnDisk::write_piece, &files_on_disk, std::placeholders::_1);
+    pieces.on_new_piece = [&files_on_disk](PieceState& piece)
+    {
+        files_on_disk.write_piece(piece);
+    };
+
+    debug_.total_ = pieces.total_size_;
+    debug_.pieces_count_ = pieces.pieces_count_;
 
     while (pieces.downloaded_pieces_count_ < pieces.pieces_count_)
     {
