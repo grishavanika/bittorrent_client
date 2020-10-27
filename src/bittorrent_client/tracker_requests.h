@@ -43,6 +43,8 @@ struct Tracker
             , HTTP_GetRequest
             , HTTPS_GetRequest
             , UDP_Request>;
+
+    using AllTrackers = std::vector<Request>;
 };
 
 namespace be

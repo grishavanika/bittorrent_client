@@ -92,29 +92,54 @@ namespace be
     }
 
     auto TorrentClient::build_tracker_requests(const Tracker::RequestInfo& info) const
-            -> outcome::result<Tracker::Request>
+            -> outcome::result<Tracker::AllTrackers>
     {
-        // Url lib uses exceptions for errors. We want to
-        // return nullopt.
-        try
+        auto build_from_one = [this, &info]
+            (const std::string& url_utf8)
+                -> outcome::result<Tracker::Request>
         {
-            Url url(metainfo_.tracker_url_utf8_);
-            if (url.scheme() == "http")
+            // Url lib uses exceptions for errors. We want to
+            // return nullopt.
+            try
             {
-                return build_http_request<Tracker::HTTP_GetRequest>(
-                    url, info, 80/*default port*/);
-            }
-            else if (url.scheme() == "https")
+                Url url(url_utf8);
+                if (url.scheme() == "http")
+                {
+                    return build_http_request<Tracker::HTTP_GetRequest>(
+                        url, info, 80/*default port*/);
+                }
+                else if (url.scheme() == "https")
+                {
+                    return build_http_request<Tracker::HTTPS_GetRequest>(
+                        url, info, 443/*default port*/);
+                }
+                else if (url.scheme() == "udp")
+                {
+                    return build_udp_request(url, info);
+                }
+            } catch (...) {}
+            return outcome::failure(ClientErrorc::TODO);
+        };
+        if (metainfo_.multi_trackers_.empty())
+        {
+            OUTCOME_TRY(main, build_from_one(metainfo_.tracker_url_utf8_));
+            return outcome::success(Tracker::AllTrackers(std::size_t(1), std::move(main)));
+        }
+
+        Tracker::AllTrackers all_trackers;
+        all_trackers.reserve(metainfo_.multi_trackers_.size());
+        for (const auto& tracker : metainfo_.multi_trackers_)
+        {
+            (void)tracker.tier_; // Ignore tier for now.
+            if (auto data = build_from_one(tracker.url_utf8_))
             {
-                return build_http_request<Tracker::HTTPS_GetRequest>(
-                    url, info, 443/*default port*/);
-            }
-            else if (url.scheme() == "udp")
-            {
-                return build_udp_request(url, info);
+                all_trackers.push_back(std::move(data.value()));
             }
         }
-        catch (...) { }
+        if (all_trackers.size() > 0)
+        {
+            return outcome::success(std::move(all_trackers));
+        }
         return outcome::failure(ClientErrorc::TODO);
     }
 
@@ -184,25 +209,79 @@ namespace be
         return outcome::success(Tracker::Request(std::move(udp)));
     }
 
-    asio::awaitable<outcome::result<be::TrackerResponse>>
+    static auto TryGetOnlyPeers(TrackerResponse&& response)
+        -> outcome::result<std::vector<PeerAddress>>
+    {
+        using OkTag = TrackerResponse::OnSuccess;
+        if (auto* peers = std::get_if<OkTag>(&response.data_))
+        {
+            return outcome::success(std::move(peers->peers_));
+        }
+        return outcome::failure(ClientErrorc::TODO);
+    }
+
+    static void RemoveDuplicates(std::vector<PeerAddress>& all_peers)
+    {
+        std::sort(std::begin(all_peers), std::end(all_peers)
+            , [](const PeerAddress& lhs, const PeerAddress& rhs)
+        {
+            return (std::tie(lhs.ipv4_, lhs.port_) < std::tie(rhs.ipv4_, rhs.port_));
+        });
+        auto it = std::unique(std::begin(all_peers), std::end(all_peers)
+            , [](const PeerAddress& lhs, const PeerAddress& rhs)
+        {
+            return (std::tie(lhs.ipv4_, lhs.port_) == std::tie(rhs.ipv4_, rhs.port_));
+        });
+        (void)all_peers.erase(it, std::end(all_peers));
+    }
+
+    asio::awaitable<outcome::result<std::vector<PeerAddress>>>
         TorrentClient::request_torrent_peers(asio::io_context& io_context
             , const Tracker::RequestInfo& info)
     {
-        OUTCOME_CO_TRY(data, build_tracker_requests(info));
-        if (auto* http_get = std::get_if<Tracker::HTTP_GetRequest>(&data))
+        auto fetch_one = [this, &io_context](Tracker::Request& data)
+            -> asio::awaitable<outcome::result<std::vector<PeerAddress>>>
         {
-            OUTCOME_CO_TRY(response, co_await HTTP_TrackerAnnounce(io_context, *http_get));
-            co_return outcome::success(std::move(response));
+            if (auto* http_get = std::get_if<Tracker::HTTP_GetRequest>(&data))
+            {
+                OUTCOME_CO_TRY(response, co_await HTTP_TrackerAnnounce(io_context, *http_get));
+                co_return TryGetOnlyPeers(std::move(response));
+            }
+            else if (auto* https_get = std::get_if<Tracker::HTTPS_GetRequest>(&data))
+            {
+                OUTCOME_CO_TRY(response, co_await HTTPS_TrackerAnnounce(io_context, *https_get));
+                co_return TryGetOnlyPeers(std::move(response));
+            }
+            else if (auto* udp = std::get_if<Tracker::UDP_Request>(&data))
+            {
+                OUTCOME_CO_TRY(response, co_await UDP_TrackerAnnounce(io_context, *random_, *udp));
+                co_return TryGetOnlyPeers(std::move(response));
+            }
+            co_return outcome::failure(ClientErrorc::TODO);
+        };
+
+        std::vector<PeerAddress> all_peers;
+        auto try_add_peers = [&all_peers](outcome::result<std::vector<PeerAddress>>&& new_peers)
+        {
+            if (!new_peers)
+            {
+                return;
+            }
+            all_peers.insert(all_peers.end()
+                , std::make_move_iterator(new_peers.value().begin())
+                , std::make_move_iterator(new_peers.value().end()));
+        };
+        OUTCOME_CO_TRY(all_infos, build_tracker_requests(info));
+        for (Tracker::Request& data : all_infos)
+        {
+            try_add_peers(co_await fetch_one(data));
         }
-        else if (auto* https_get = std::get_if<Tracker::HTTPS_GetRequest>(&data))
+        
+        RemoveDuplicates(all_peers);
+
+        if (all_peers.size() > 0)
         {
-            OUTCOME_CO_TRY(response, co_await HTTPS_TrackerAnnounce(io_context, *https_get));
-            co_return outcome::success(std::move(response));
-        }
-        else if (auto* udp = std::get_if<Tracker::UDP_Request>(&data))
-        {
-            OUTCOME_CO_TRY(response, co_await UDP_TrackerAnnounce(io_context, *random_, *udp));
-            co_return outcome::success(std::move(response));
+            co_return outcome::success(std::move(all_peers));
         }
         co_return outcome::failure(ClientErrorc::TODO);
     }

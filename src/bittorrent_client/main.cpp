@@ -278,32 +278,30 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
     request.downloaded_pieces = pieces.downloaded_pieces_count_;
     request.uploaded_pieces = 0;
 
-    be::TrackerResponse tracker;
+    std::vector<be::PeerAddress> peers_addresses;
     { // Get the info from the tracker first.
         asio::io_context io_context(1);
         asio::co_spawn(io_context
             , [&]() -> asio::awaitable<void>
+        {
+            auto data = co_await client.request_torrent_peers(io_context, request);
+            if (data)
             {
-                auto data = co_await client.request_torrent_peers(io_context, request);
-                assert(data);
-                tracker = std::move(data.value());
-                co_return;
+                peers_addresses = std::move(data.value());
             }
+            co_return;
+        }
             , asio::detached);
-
         io_context.run();
     }
 
-    auto tracker_info = std::get_if<be::TrackerResponse::OnSuccess>(&tracker.data_);
-    assert(tracker_info);
-    assert(!tracker_info->peers_.empty());
-
-    debug_.OnPeersListReceived(tracker_info->peers_);
+    assert(peers_addresses.size() > 0);
+    debug_.OnPeersListReceived(peers_addresses);
 
     asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
-    peers.reserve(tracker_info->peers_.size());
-    for (auto address : tracker_info->peers_)
+    peers.reserve(peers_addresses.size());
+    for (auto address : peers_addresses)
     {
         peers.emplace_back(io_context);
         asio::co_spawn(io_context

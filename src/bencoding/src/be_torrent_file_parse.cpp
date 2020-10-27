@@ -51,6 +51,38 @@ namespace be
         return outcome::failure(ParseErrorc::EmptyAnnounce);
     }
 
+    static outcome::result<void> ParseAnnounceList(TorrentMetainfo& metainfo, ElementRef& announce_list)
+    {
+        OUTCOME_TRY(list, be::ElementRefAs<ListRef>(announce_list));
+        if (list->empty())
+        {
+            return outcome::success();
+        }
+        using Multitracker = TorrentMetainfo::Multitracker;
+
+        for (std::size_t i = 0, count = list->size(); i < count; ++i)
+        {
+            if (auto tier = be::ElementRefAs<ListRef>((*list)[i]))
+            {
+                for (const ElementRef& url_ : *tier.value())
+                {
+                    if (auto* url_str = url_.as_string())
+                    {
+                        if (url_str->empty())
+                        {
+                            continue;
+                        }
+                        metainfo.multi_trackers_.push_back({});
+                        Multitracker& tracker = metainfo.multi_trackers_.back();
+                        tracker.url_utf8_.assign(AsConstData(*url_str), url_str->size());
+                        tracker.tier_ = int(i);
+                    }
+                }
+            }
+        }
+        return outcome::success();
+    }
+
     static outcome::result<void> ParseInfo_Name(TorrentMetainfo& metainfo, ElementRef& name)
     {
         OUTCOME_TRY(str, be::ElementRefAs<StringRef>(name));
@@ -238,10 +270,12 @@ namespace be
         OUTCOME_TRY(data, ParseDictionary(content));
 
         ElementPosition info_position;
+        ElementPosition announce_position;
         KeyParser k_parsers[] =
         {
-            {"announce", &ParseAnnounce, false, nullptr},
-            {"info",     &ParseInfo,     false, &info_position},
+            {"announce",      &ParseAnnounce,     false, &announce_position},
+            {"info",          &ParseInfo,         false, &info_position},
+            {"announce-list", &ParseAnnounceList, false, nullptr},
         };
 
         TorrentMetainfo metainfo;
@@ -250,12 +284,10 @@ namespace be
             OUTCOME_TRY(InvokeParserOptionalKey(metainfo, k_parsers, name, element));
         }
 
-        for (const auto& state : k_parsers)
+        if ((announce_position.end_ == 0)
+            || (info_position.end_ == 0))
         {
-            if (!state.parsed_)
-            {
-                return outcome::failure(ParseErrorc::MissingInfoProperty);
-            }
+            return outcome::failure(ParseErrorc::MissingInfoProperty);
         }
 
         TorrentFileInfo info;

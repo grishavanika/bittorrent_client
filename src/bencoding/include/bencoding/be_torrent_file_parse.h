@@ -52,10 +52,19 @@ namespace be
             LengthOrFiles length_or_files_; // 'length' or 'files'.
         };
 
-        // See also "Multitracker Metadata Extension".
-        // https://www.bittorrent.org/beps/bep_0012.html
-        std::string tracker_url_utf8_; // 'announce'.
         Info info_; // 'info'.
+
+        // See "Multitracker Metadata Extension":
+        // https://www.bittorrent.org/beps/bep_0012.html
+        struct Multitracker
+        {
+            std::string url_utf8_;
+            int tier_ = 0;
+        };
+        using MultitrackersList = std::vector<Multitracker>;
+      
+        std::string tracker_url_utf8_; // 'announce'.
+        MultitrackersList multi_trackers_; // 'announce-list'.
     };
 
     struct TorrentFileInfo

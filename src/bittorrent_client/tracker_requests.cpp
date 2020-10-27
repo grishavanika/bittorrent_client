@@ -254,13 +254,15 @@ namespace be
     // after every retransmission. Note that it is necessary to
     // rerequest a connection ID when it has expired.
     // 
-    // Should be 8 = 64 hours.
-    // Instead, retry 2 times only (~45 secs).
-    unsigned k_retry_N_max = 1;
+    // Should be 8 = 64 hours (with standard 15 secs base).
+    // Instead, try only once.
+    unsigned k_retry_N_max = 0;
+    // Should be 15 secs.
+    unsigned k_wait_base_secs = 2;
 
     static std::chrono::seconds RetryTimeout(unsigned n)
     {
-        return std::chrono::seconds(15 * unsigned(std::pow(2, n)));
+        return std::chrono::seconds(k_wait_base_secs * unsigned(std::pow(2, n)));
     }
 
     using UDPEndpoint = asio::ip::udp::resolver::results_type::value_type;

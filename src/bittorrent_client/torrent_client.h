@@ -49,10 +49,10 @@ namespace be
         std::uint64_t get_total_size_bytes() const;
         std::uint32_t get_piece_size_bytes() const;
 
-        outcome::result<Tracker::Request> build_tracker_requests(
+        outcome::result<Tracker::AllTrackers> build_tracker_requests(
             const Tracker::RequestInfo& info) const;
 
-        asio::awaitable<outcome::result<TrackerResponse>>
+        asio::awaitable<outcome::result<std::vector<PeerAddress>>>
             request_torrent_peers(asio::io_context& io_context
                 , const Tracker::RequestInfo& info);
 
