@@ -1,6 +1,7 @@
 #pragma once
-#include <cstdint>
 #include <bit> // C++20 std::endian
+
+#include <cstdint>
 
 // Small parts FROM Boost.Endian:
 // https://github.com/boostorg/endian

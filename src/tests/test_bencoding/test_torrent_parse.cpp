@@ -1,8 +1,10 @@
 #include <bencoding/be_torrent_file_parse.h>
+
 #include <small_utils/utils_read_file.h>
-#include <gtest/gtest.h>
 
 #include <TinySHA1.hpp>
+
+#include <gtest/gtest.h>
 
 using namespace be;
 

@@ -5,6 +5,7 @@
 #include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/be_element_ref_parse.h>
 #include <bencoding/be_tracker_response_parse.h>
+
 #include <small_utils/utils_read_file.h>
 #include <small_utils/utils_experimental.h>
 
@@ -23,6 +24,9 @@
 #  undef NDEBUG
 #endif
 #include <cassert>
+
+// For writes to files.
+#include <Windows.h>
 
 // As per https://www.bittorrent.org/beps/bep_0003.html
 // All current implementations use 2^14 (16 kiB),
@@ -460,8 +464,6 @@ struct FilesList
         iterate_files(start, end, std::move(f));
     }
 };
-
-#include <Windows.h>
 
 struct PhysicalFile
 {

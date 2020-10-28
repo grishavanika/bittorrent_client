@@ -1,4 +1,6 @@
 #include "utils_http.h"
+#include "client_errors.h"
+#include "asio_outcome_as_result.hpp"
 
 #include <asio.hpp>
 #include <asio/ssl.hpp>
@@ -10,9 +12,6 @@
 #include <iterator>
 
 #include <cstdint>
-
-#include "client_errors.h"
-#include "asio_outcome_as_result.hpp"
 
 namespace detail
 {

@@ -1,8 +1,9 @@
 #include "torrent_client.h"
-#include "asio_outcome_as_result.hpp"
 #include "utils_endian.h"
+#include "asio_outcome_as_result.hpp"
 
 #include <bencoding/be_torrent_file_parse.h>
+
 #include <small_utils/utils_read_file.h>
 #include <small_utils/utils_string.h>
 #include <small_utils/utils_bytes.h>
@@ -10,10 +11,10 @@
 
 #include <url.hpp>
 
+#include <iostream>
+
 #include <cstring>
 #include <cassert>
-
-#include <iostream>
 
 namespace be
 {

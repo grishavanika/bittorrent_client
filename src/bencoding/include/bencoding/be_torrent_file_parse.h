@@ -2,11 +2,12 @@
 #include <bencoding/be_element_ref.h>
 #include <bencoding/be_errors.h>
 
+#include <string>
+#include <string_view>
+#include <variant>
+
 #include <cstdint>
 #include <cstring>
-#include <string_view>
-#include <string>
-#include <variant>
 
 namespace be
 {
