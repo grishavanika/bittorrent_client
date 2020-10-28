@@ -16,5 +16,5 @@ cmake_print_variables(outcome_SOURCE_DIR)
 add_library(outcome INTERFACE)
 target_sources(outcome INTERFACE
     "${outcome_SOURCE}/single-header/outcome.hpp")
-target_include_directories(scope_guard INTERFACE
+target_include_directories(outcome INTERFACE
     "${outcome_SOURCE}/single-header")

@@ -3,7 +3,6 @@
 
 #include <small_utils/utils_string.h>
 
-#include <asio/detail/socket_ops.hpp>
 #include <asio/redirect_error.hpp>
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
@@ -15,25 +14,6 @@
 
 namespace be
 {
-    namespace detail
-    {
-        // host_to_network_*
-        // network_to_host_*
-        using namespace asio::detail::socket_ops;
-
-        std::uint32_t HostToNetworkOrder(std::uint32_t v)
-        {
-            return std::uint32_t(host_to_network_long(
-                asio::detail::u_long_type(v)));
-        }
-
-        std::uint32_t NetworkToHostOrder(std::uint32_t v)
-        {
-            return std::uint32_t(network_to_host_long(
-                asio::detail::u_long_type(v)));
-        }
-    } // namespace detail
-
     template<typename Message>
     static outcome::result<AnyMessage> MakeMessage(std::vector<std::uint8_t>& data)
     {
@@ -135,7 +115,7 @@ namespace be
         if (ok)
         {
             Message_Have m;
-            m.piece_index_ = detail::NetworkToHostOrder(piece_index_network);
+            m.piece_index_ = big_to_native(piece_index_network);
             return outcome::success(std::move(m));
         }
         return outcome::failure(ClientErrorc::TODO);
@@ -145,9 +125,9 @@ namespace be
     {
         Buffer buffer;
         BytesWriter::make(buffer.data_)
-            .write(detail::HostToNetworkOrder(k_size))
+            .write(native_to_big(k_size))
             .write(PeerMessageId::Have)
-            .write(detail::HostToNetworkOrder(piece_index_))
+            .write(native_to_big(piece_index_))
             .finalize();
         return buffer;
     }
@@ -156,11 +136,11 @@ namespace be
     {
         Buffer buffer;
         BytesWriter::make(buffer.data_)
-            .write(detail::HostToNetworkOrder(k_size))
+            .write(native_to_big(k_size))
             .write(PeerMessageId::Request)
-            .write(detail::HostToNetworkOrder(piece_index_))
-            .write(detail::HostToNetworkOrder(offset_))
-            .write(detail::HostToNetworkOrder(length_))
+            .write(native_to_big(piece_index_))
+            .write(native_to_big(offset_))
+            .write(native_to_big(length_))
             .finalize();
         return buffer;
     }
@@ -185,8 +165,8 @@ namespace be
 
         Message_Piece m;
         m.data_offset_ = (reader.current_ - &payload[0]);
-        m.piece_index_ = detail::NetworkToHostOrder(piece_index_network);
-        m.piece_begin_ = detail::NetworkToHostOrder(begin_network);
+        m.piece_index_ = big_to_native(piece_index_network);
+        m.piece_begin_ = big_to_native(begin_network);
         m.payload_ = std::move(payload);
         return outcome::success(std::move(m));
     }
@@ -209,7 +189,7 @@ namespace be
         std::uint32_t length = 0;
         OUTCOME_CO_TRY(co_await asio::async_read(peer
             , asio::buffer(&length, sizeof(length)), coro));
-        length = detail::NetworkToHostOrder(length);
+        length = big_to_native(length);
         if (length == 0)
         {
             co_return outcome::success(AnyMessage(Message_KeepAlive{}));

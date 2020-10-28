@@ -10,7 +10,3 @@ target_link_libraries(${exe_name} PRIVATE bencoding)
 target_link_libraries(${exe_name} PRIVATE small_utils)
 target_link_libraries(${exe_name} PRIVATE CxxUrl)
 target_link_libraries(${exe_name} PRIVATE asio)
-
-
-
-

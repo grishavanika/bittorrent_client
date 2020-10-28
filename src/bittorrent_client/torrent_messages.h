@@ -1,5 +1,6 @@
 #pragma once
 #include "client_errors.h"
+#include "utils_endian.h"
 
 #include <small_utils/utils_bytes.h>
 
@@ -14,12 +15,6 @@
 
 namespace be
 {
-    namespace detail
-    {
-        std::uint32_t HostToNetworkOrder(std::uint32_t v);
-        std::uint32_t NetworkToHostOrder(std::uint32_t v);
-    } // namespace detail
-
     // https://www.bittorrent.org/beps/bep_0003.html
     enum class PeerMessageId : std::uint8_t
     {
@@ -89,7 +84,7 @@ namespace be
         {
             BufferNoPayload buffer;
             BytesWriter::make(buffer.data_)
-                .write(detail::HostToNetworkOrder(k_size_no_payload))
+                .write(native_to_big(k_size_no_payload))
                 .write(std::uint8_t(Id))
                 .finalize();
             return buffer;

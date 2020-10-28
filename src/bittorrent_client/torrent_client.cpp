@@ -1,5 +1,6 @@
 #include "torrent_client.h"
 #include "asio_outcome_as_result.hpp"
+#include "utils_endian.h"
 
 #include <bencoding/be_torrent_file_parse.h>
 #include <small_utils/utils_read_file.h>
@@ -30,11 +31,9 @@ namespace be
 
     static asio::ip::tcp::endpoint AsEndpoint(const PeerAddress& address)
     {
-        // network_to_*
-        using namespace asio::detail::socket_ops;
         return asio::ip::tcp::endpoint(asio::ip::address_v4(
-            network_to_host_long(address.ipv4_))
-            , network_to_host_short(address.port_));
+              big_to_native(address.ipv4_))
+            , big_to_native(address.port_));
     }
 
     static bool IsValidHandshakeResponse(

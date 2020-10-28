@@ -2,17 +2,7 @@
 #include "torrent_messages.h"
 #include "asio_outcome_as_result.hpp"
 #include "utils_http.h"
-
-// #QQQ: temporary. Unify host <-> network conventions.
-#define QQ_SWAP_U64(l)            \
-    ( ( ((l) >> 56) & 0x00000000000000FFULL ) |         \
-        ( ((l) >> 40) & 0x000000000000FF00ULL ) |       \
-        ( ((l) >> 24) & 0x0000000000FF0000ULL ) |       \
-        ( ((l) >>  8) & 0x00000000FF000000ULL ) |       \
-        ( ((l) <<  8) & 0x000000FF00000000ULL ) |       \
-        ( ((l) << 24) & 0x0000FF0000000000ULL ) |       \
-        ( ((l) << 40) & 0x00FF000000000000ULL ) |       \
-        ( ((l) << 56) & 0xFF00000000000000ULL ) )
+#include "utils_endian.h"
 
 namespace be
 {
@@ -32,13 +22,11 @@ namespace be
 
         Buffer serialize() const
         {
-            // WARNING: this assumes host is little-endian.
-            // (i.e., usage of QQ_SWAP_U64()).
             Buffer buffer;
             BytesWriter::make(buffer.data_)
-                .write(QQ_SWAP_U64(connection_id_))
-                .write(be::detail::HostToNetworkOrder(action_))
-                .write(be::detail::HostToNetworkOrder(transaction_id_))
+                .write(native_to_big(connection_id_))
+                .write(native_to_big(action_))
+                .write(native_to_big(transaction_id_))
                 .finalize();
             return buffer;
         }
@@ -56,11 +44,9 @@ namespace be
             {
                 return outcome::failure(ClientErrorc::TODO);
             }
-            // WARNING: this assumes host is little-endian.
-            // (i.e., usage of QQ_SWAP_U64()).
-            m.action_ = be::detail::NetworkToHostOrder(m.action_);
-            m.transaction_id_ = be::detail::NetworkToHostOrder(m.transaction_id_);
-            m.connection_id_ = QQ_SWAP_U64(m.connection_id_);
+            m.action_ = big_to_native(m.action_);
+            m.transaction_id_ = big_to_native(m.transaction_id_);
+            m.connection_id_ = big_to_native(m.connection_id_);
             return outcome::success(std::move(m));
         }
     };
@@ -103,19 +89,19 @@ namespace be
         {
             Buffer buffer;
             BytesWriter::make(buffer.data_)
-                .write(QQ_SWAP_U64(connection_id_))
-                .write(be::detail::HostToNetworkOrder(action_))
-                .write(be::detail::HostToNetworkOrder(transaction_id_))
+                .write(native_to_big(connection_id_))
+                .write(native_to_big(action_))
+                .write(native_to_big(transaction_id_))
                 .write(info_hash_.data_)
                 .write(peer_id_.data_)
-                .write(QQ_SWAP_U64(downloaded_))
-                .write(QQ_SWAP_U64(left_))
-                .write(QQ_SWAP_U64(uploaded_))
-                .write(be::detail::HostToNetworkOrder(event_))
-                .write(be::detail::HostToNetworkOrder(IP_))
-                .write(be::detail::HostToNetworkOrder(key_))
-                .write(be::detail::HostToNetworkOrder(num_want_))
-                .write(asio::detail::socket_ops::network_to_host_short(port_))
+                .write(native_to_big(downloaded_))
+                .write(native_to_big(left_))
+                .write(native_to_big(uploaded_))
+                .write(native_to_big(event_))
+                .write(native_to_big(IP_))
+                .write(native_to_big(key_))
+                .write(native_to_big(num_want_))
+                .write(native_to_big(port_))
                 .finalize();
             return buffer;
         }
@@ -163,11 +149,11 @@ namespace be
             {
                 return outcome::failure(ClientErrorc::TODO);
             }
-            m.action_ = be::detail::NetworkToHostOrder(m.action_);
-            m.transaction_id_ = be::detail::NetworkToHostOrder(m.transaction_id_);
-            m.intervals_secs_ = be::detail::NetworkToHostOrder(m.intervals_secs_);
-            m.leechers_ = be::detail::NetworkToHostOrder(m.leechers_);
-            m.seeders_ = be::detail::NetworkToHostOrder(m.seeders_);
+            m.action_         = big_to_native(m.action_);
+            m.transaction_id_ = big_to_native(m.transaction_id_);
+            m.intervals_secs_ = big_to_native(m.intervals_secs_);
+            m.leechers_       = big_to_native(m.leechers_);
+            m.seeders_        = big_to_native(m.seeders_);
             
             const std::size_t peers_bytes = (actually_read - k_header_size);
             if ((peers_bytes % k_address_size) != 0)
