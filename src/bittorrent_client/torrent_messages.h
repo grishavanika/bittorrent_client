@@ -1,13 +1,10 @@
 #pragma once
 #include "client_errors.h"
 #include "utils_endian.h"
+#include "utils_asio.h"
+#include "asio_outcome_as_result.hpp"
 
 #include <small_utils/utils_bytes.h>
-
-#include <asio/awaitable.hpp>
-#include <asio/use_awaitable.hpp>
-#include <asio/ip/tcp.hpp>
-#include <asio/redirect_error.hpp>
 
 #include <variant>
 
@@ -174,12 +171,10 @@ namespace be
         , Message_KeepAlive
         , Message_Unknown>;
 
-    asio::awaitable<outcome::result<AnyMessage>> ReadAnyMessage(asio::ip::tcp::socket& peer);
-    asio::awaitable<outcome::result<void>> SendAnyMessage(asio::ip::tcp::socket& peer
-        , const void* data, std::size_t size);
+    co_asio_result<AnyMessage> ReadAnyMessage(asio::ip::tcp::socket& peer);
 
     template<typename Message>
-    asio::awaitable<outcome::result<Message>> ReadMessage(asio::ip::tcp::socket& peer)
+    co_asio_result<Message> ReadMessage(asio::ip::tcp::socket& peer)
     {
         OUTCOME_CO_TRY(any_m, co_await ReadAnyMessage(peer));
         if (Message* exact = std::get_if<Message>(&any_m))
@@ -190,12 +185,11 @@ namespace be
     }
 
     template<typename Message>
-    asio::awaitable<outcome::result<void>> SendMessage(
-        asio::ip::tcp::socket& peer, const Message& m)
+    co_asio_result<void> SendMessage(asio::ip::tcp::socket& peer, const Message& m)
     {
         const auto buffer = m.serialize();
-        OUTCOME_CO_TRY(co_await SendAnyMessage(
-            peer, buffer.data_, sizeof(buffer.data_)));
+        OUTCOME_CO_TRY(co_await asio::async_write(peer
+            , asio::buffer(buffer.data_), as_result(asio::use_awaitable)));
         co_return outcome::success();
     }
 

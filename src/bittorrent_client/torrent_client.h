@@ -2,13 +2,12 @@
 #include "torrent_messages.h"
 #include "tracker_requests.h"
 #include "client_errors.h"
+#include "utils_asio.h"
 
 #include <bencoding/be_torrent_file_parse.h>
 #include <bencoding/be_tracker_response_parse.h>
 
 #include <small_utils/utils_bytes.h>
-
-#include <asio.hpp>
 
 class Url;
 
@@ -19,7 +18,7 @@ namespace be
         explicit TorrentPeer(asio::io_context& io_context);
 
         // Connect & Handshake.
-        asio::awaitable<outcome::result<void>> start(
+        co_asio_result<void> start(
             const PeerAddress& address
             , const SHA1Bytes& info_hash
             , const PeerId& peer_id);
@@ -53,9 +52,9 @@ namespace be
         outcome::result<Tracker::AllTrackers> build_tracker_requests(
             const Tracker::RequestInfo& info) const;
 
-        asio::awaitable<outcome::result<std::vector<PeerAddress>>>
+        co_asio_result<std::vector<PeerAddress>>
             request_torrent_peers(asio::io_context& io_context
-                , const Tracker::RequestInfo& info);
+                , const Tracker::RequestInfo& info) const;
 
     private:
         template<typename Body>

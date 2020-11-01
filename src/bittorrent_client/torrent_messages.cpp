@@ -1,12 +1,6 @@
 #include "torrent_messages.h"
-#include "asio_outcome_as_result.hpp"
 
 #include <small_utils/utils_string.h>
-
-#include <asio/redirect_error.hpp>
-#include <asio/use_awaitable.hpp>
-#include <asio/write.hpp>
-#include <asio/read.hpp>
 
 #include <cstring>
 #include <cassert>
@@ -183,7 +177,7 @@ namespace be
         return &payload_[data_offset_];
     }
 
-    asio::awaitable<outcome::result<AnyMessage>> ReadAnyMessage(asio::ip::tcp::socket& peer)
+    co_asio_result<AnyMessage> ReadAnyMessage(asio::ip::tcp::socket& peer)
     {
         auto coro = as_result(asio::use_awaitable);
         std::uint32_t length = 0;
@@ -216,21 +210,6 @@ namespace be
         default:                           co_return MakeMessage<Message_Unknown>(data);
         }
         co_return outcome::failure(ClientErrorc::TODO);
-    }
-
-    asio::awaitable<outcome::result<void>> SendAnyMessage(
-        asio::ip::tcp::socket& peer
-        , const void* data
-        , std::size_t size)
-    {
-        if (!data || (size == 0))
-        {
-            co_return outcome::failure(ClientErrorc::TODO);
-        }
-
-        OUTCOME_CO_TRY(co_await asio::async_write(peer
-            , asio::buffer(data, size), as_result(asio::use_awaitable)));
-        co_return outcome::success();
     }
 
 } // namespace be

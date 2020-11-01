@@ -1,11 +1,10 @@
 #pragma once
 #include "client_errors.h"
+#include "utils_asio.h"
 
 #include <bencoding/be_tracker_response_parse.h>
 
 #include <small_utils/utils_bytes.h>
-
-#include <asio.hpp>
 
 #include <string>
 #include <variant>
@@ -50,15 +49,15 @@ struct Tracker
 
 namespace be
 {
-    asio::awaitable<outcome::result<TrackerResponse>>
+    co_asio_result<TrackerResponse>
         HTTP_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTP_GetRequest& request);
 
-    asio::awaitable<outcome::result<TrackerResponse>>
+    co_asio_result<TrackerResponse>
         HTTPS_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTPS_GetRequest& request);
 
-    asio::awaitable<outcome::result<TrackerResponse>>
+    co_asio_result<TrackerResponse>
         UDP_TrackerAnnounce(asio::io_context& io_context
             , std::random_device& random
             , const Tracker::UDP_Request& request);

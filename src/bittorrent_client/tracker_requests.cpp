@@ -178,7 +178,7 @@ namespace be
     };
 
     template<typename Buffer>
-    static asio::awaitable<outcome::result<std::size_t>> AsyncReceiveWithTimeout(
+    static co_asio_result<std::size_t> AsyncReceiveWithTimeout(
         asio::io_context& io_context
         , asio::ip::udp::socket& socket
         , Buffer& buffer
@@ -253,7 +253,7 @@ namespace be
 
     using UDPEndpoint = asio::ip::udp::resolver::results_type::value_type;
 
-    asio::awaitable<outcome::result<std::uint64_t>>
+    co_asio_result<std::uint64_t>
         AsyncConnect(asio::io_context& io_context
             , asio::ip::udp::socket& socket
             , const UDPEndpoint& endpoint
@@ -291,7 +291,7 @@ namespace be
         co_return outcome::failure(ClientErrorc::TODO);
     }
 
-    asio::awaitable<outcome::result<be::TrackerResponse>>
+    co_asio_result<be::TrackerResponse>
         AsyncAnnounce(asio::io_context& io_context
             , asio::ip::udp::socket& socket
             , const UDPEndpoint& endpoint
@@ -339,7 +339,7 @@ namespace be
     }
 
     // http://www.bittorrent.org/beps/bep_0015.html
-    asio::awaitable<outcome::result<be::TrackerResponse>>
+    co_asio_result<be::TrackerResponse>
         UDP_TrackerAnnounce(asio::io_context& io_context
             , std::random_device& random
             , const Tracker::UDP_Request& request)
@@ -368,7 +368,7 @@ namespace be
         co_return outcome::success(std::move(response));
     }
 
-    asio::awaitable<outcome::result<TrackerResponse>>
+    co_asio_result<TrackerResponse>
         HTTP_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTP_GetRequest& request)
     {
@@ -377,7 +377,7 @@ namespace be
         co_return ParseTrackerCompactResponseContent(body);
     }
 
-    asio::awaitable<outcome::result<TrackerResponse>>
+    co_asio_result<TrackerResponse>
         HTTPS_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTPS_GetRequest& request)
     {

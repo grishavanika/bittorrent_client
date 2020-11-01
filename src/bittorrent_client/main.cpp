@@ -174,7 +174,7 @@ void PiecesToDownload::on_piece_downloaded(Handle piece)
     pieces_.erase(piece);
 }
 
-asio::awaitable<outcome::result<void>> TryDownloadPiecesFromPeer(
+co_asio_result<void> TryDownloadPiecesFromPeer(
     be::TorrentPeer& peer, PiecesToDownload& pieces)
 {
     // Mostly from https://blog.jse.li/posts/torrent/.

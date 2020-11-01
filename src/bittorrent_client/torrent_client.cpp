@@ -235,12 +235,12 @@ namespace be
         (void)all_peers.erase(it, std::end(all_peers));
     }
 
-    asio::awaitable<outcome::result<std::vector<PeerAddress>>>
+    co_asio_result<std::vector<PeerAddress>>
         TorrentClient::request_torrent_peers(asio::io_context& io_context
-            , const Tracker::RequestInfo& info)
+            , const Tracker::RequestInfo& info) const
     {
         auto fetch_one = [this, &io_context](Tracker::Request& data)
-            -> asio::awaitable<outcome::result<std::vector<PeerAddress>>>
+            -> co_asio_result<std::vector<PeerAddress>>
         {
             if (auto* http_get = std::get_if<Tracker::HTTP_GetRequest>(&data))
             {
@@ -318,7 +318,7 @@ namespace be
         return std::uint32_t(metainfo_.info_.piece_length_bytes_);
     }
 
-    asio::awaitable<outcome::result<void>> TorrentPeer::start(
+    co_asio_result<void> TorrentPeer::start(
         const PeerAddress& address
         , const SHA1Bytes& info_hash
         , const PeerId& peer_id)

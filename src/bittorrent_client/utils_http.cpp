@@ -2,7 +2,6 @@
 #include "client_errors.h"
 #include "asio_outcome_as_result.hpp"
 
-#include <asio.hpp>
 #include <asio/ssl.hpp>
 
 #include <string>
@@ -26,7 +25,7 @@ namespace detail
             return HTTPContext(io_context);
         }
 
-        asio::awaitable<outcome::result<void>> connect(
+        co_asio_result<void> connect(
             asio::ip::tcp::resolver::results_type& endpoints)
         {
             auto coro = as_result(asio::use_awaitable);
@@ -58,7 +57,7 @@ namespace detail
             return HTTPSContext(io_context);
         }
 
-        asio::awaitable<outcome::result<void>> connect(
+        co_asio_result<void> connect(
             asio::ip::tcp::resolver::results_type& endpoints)
         {
             auto coro = as_result(asio::use_awaitable);
@@ -81,7 +80,7 @@ namespace detail
     // http/async_client.cpp:
     // https://github.com/chriskohlhoff/asio/blob/master/asio/src/examples/cpp03/http/client/async_client.cpp
     template<typename Context>
-    static asio::awaitable<outcome::result<std::string>>
+    static co_asio_result<std::string>
         HTTP_GET(asio::io_context& io_context
             , std::string host, std::string get_uri
             , std::uint16_t port_n)
@@ -168,7 +167,7 @@ namespace detail
     }
 } // namespace detail
 
-asio::awaitable<outcome::result<std::string>>
+co_asio_result<std::string>
     HTTP_GET(asio::io_context& io_context
         , std::string host, std::string get_uri
         , std::uint16_t port_n /*= 80*/)
@@ -178,7 +177,7 @@ asio::awaitable<outcome::result<std::string>>
     co_return outcome::success(std::move(data));
 }
 
-asio::awaitable<outcome::result<std::string>>
+co_asio_result<std::string>
     HTTPS_GET_NoVerification(asio::io_context& io_context
         , std::string host, std::string get_uri
         , std::uint16_t port_n /*= 443*/)
