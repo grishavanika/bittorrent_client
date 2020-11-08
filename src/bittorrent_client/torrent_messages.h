@@ -32,7 +32,7 @@ namespace be
     {
         static constexpr char k_protocol[] = "BitTorrent protocol";
 
-        static constexpr std::size_t k_size =
+        static constexpr std::uint32_t k_size =
               1                        // 1 byte 'protocol_length_' = 0x13
             + (sizeof(k_protocol) - 1) // 19 bytes 'pstr_'
             + sizeof(ExtensionsBuffer) // 8 bytes 'reserved_', extensions
@@ -58,7 +58,7 @@ namespace be
     template<typename Message, PeerMessageId Id>
     struct Message_Base
     {
-        static constexpr std::size_t k_size_no_payload =
+        static constexpr std::uint32_t k_size_no_payload =
               sizeof(std::uint32_t)  // 4 bytes, length
             + sizeof(PeerMessageId); // 1 byte, id
 
@@ -102,7 +102,7 @@ namespace be
 
         static outcome::result<Message_Have> ParseNetwork(std::vector<std::uint8_t> payload);
 
-        static constexpr std::size_t k_size =
+        static constexpr std::uint32_t k_size =
               sizeof(std::uint32_t)  // 4 bytes, length
             + sizeof(PeerMessageId)  // 1 byte, id
             + sizeof(std::uint32_t); // 4 bytes, index
@@ -125,7 +125,7 @@ namespace be
 
     struct Message_Request : Message_Base<Message_Request, PeerMessageId::Request>
     {
-        static constexpr std::size_t k_size =
+        static constexpr std::uint32_t k_size =
               sizeof(std::uint32_t)  // 4 bytes, length
             + sizeof(PeerMessageId)  // 1 byte, id
             + sizeof(std::uint32_t)  // 4 bytes, index
