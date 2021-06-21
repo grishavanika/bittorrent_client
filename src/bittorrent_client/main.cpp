@@ -70,6 +70,34 @@ struct PiecesToDownload
     void on_piece_downloaded(Handle piece);
 };
 
+struct DebugPeerAddress
+{
+    asio::ip::tcp::endpoint endpoint_;
+    std::string host_name_;
+};
+
+static asio::ip::tcp::endpoint AsEndpoint(const be::PeerAddress& address)
+{
+    return asio::ip::tcp::endpoint(asio::ip::address_v4(
+        big_to_native(address.ipv4_))
+        , big_to_native(address.port_));
+}
+
+static std::optional<DebugPeerAddress> ResolveToNicePeerAddress(asio::ip::tcp::resolver& resolver, const be::PeerAddress& peer)
+{
+    std::error_code ec;
+    auto it = resolver.resolve(AsEndpoint(peer), ec);
+    (void)ec;
+    if (it == asio::ip::tcp::resolver::iterator())
+    {
+        return std::nullopt;
+    }
+    DebugPeerAddress debug_peer;
+    debug_peer.endpoint_ = it->endpoint();
+    debug_peer.host_name_ = it->host_name();
+    return debug_peer;
+}
+
 struct DebugObserver
 {
     std::uint64_t total_ = 0;
@@ -85,7 +113,7 @@ struct DebugObserver
         , std::uint32_t bytes_received);
 
     void OnPeersListReceived(const std::vector<be::PeerAddress>& peers);
-    void OnPeerFinished();
+    void OnPeerFinished(be::PeerAddress peer, std::optional<DebugPeerAddress> debug_info, std::error_code ec);
 };
 
 DebugObserver debug_;
@@ -302,15 +330,23 @@ void DoOneTrackerRound(be::TorrentClient& client, PiecesToDownload& pieces)
     assert(peers_addresses.size() > 0);
     debug_.OnPeersListReceived(peers_addresses);
 
-    asio::io_context io_context(1);
     std::vector<be::TorrentPeer> peers;
     peers.reserve(peers_addresses.size());
+
+    asio::io_context io_context(1);
+    asio::ip::tcp::resolver resolver(io_context);
+
     for (auto address : peers_addresses)
     {
         peers.emplace_back(io_context);
+
+        auto debug_info = ResolveToNicePeerAddress(resolver, address);
         asio::co_spawn(io_context
             , DownloadFromPeer(io_context, client, address, pieces, peers.back())
-            , asio::detached);
+            , [address, info = std::move(debug_info)](std::exception_ptr, std::error_code ec)
+        {
+            debug_.OnPeerFinished(address, info, ec);
+        });
     }
 
     io_context.run();
@@ -653,13 +689,41 @@ void DebugObserver::OnPeersListReceived(const std::vector<be::PeerAddress>& peer
     printf("Received %u peers.\n", total_peers_);
 }
 
-void DebugObserver::OnPeerFinished()
+void DebugObserver::OnPeerFinished(be::PeerAddress peer, std::optional<DebugPeerAddress> debug_info, std::error_code ec)
 {
-    assert(peers_count_ > 0);
-    --peers_count_;
+    if (!debug_info)
+    {
+        if (ec)
+        {
+            printf("Peer %u:%u finished with error: %s.\n"
+                , unsigned(peer.ipv4_)
+                , unsigned(peer.port_)
+                , ec.message().c_str());
+        }
+        else
+        {
+            printf("Peer %u:%u finished with success.\n"
+                , unsigned(peer.ipv4_)
+                , unsigned(peer.port_));
+        }
+        return;
+    }
 
-    printf("Peer's finish; %u out of %u peers available.\n"
-        , peers_count_, total_peers_);
+    if (ec)
+    {
+        printf("Peer [%s]: %s:%i finished with error: %s.\n"
+            , debug_info->endpoint_.address().to_string().c_str()
+            , debug_info->host_name_.c_str()
+            , int(debug_info->endpoint_.port())
+            , ec.message().c_str());
+    }
+    else
+    {
+        printf("Peer [%s]: %s:%i finished with success.\n"
+            , debug_info->endpoint_.address().to_string().c_str()
+            , debug_info->host_name_.c_str()
+            , int(debug_info->endpoint_.port()));
+    }
 }
 
 int main(int argc, char* argv[])
