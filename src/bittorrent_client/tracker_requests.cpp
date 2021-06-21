@@ -276,7 +276,7 @@ namespace be
                 , socket, buffer, timeout_secs);
             if (ok)
             {
-                OUTCOME_CO_TRY(response, Message_UDP_Connect::ParseNetwork(buffer));
+                OUTCOME_CO_TRY(Message_UDP_Connect response, Message_UDP_Connect::ParseNetwork(buffer));
                 assert(response.action_ == 0);
                 assert(response.transaction_id_ == msg.transaction_id_);
                 assert(response.connection_id_ != 0);
@@ -324,7 +324,7 @@ namespace be
         {
             co_return outcome::failure(ClientErrorc::TODO);
         }
-        OUTCOME_CO_TRY(response, Message_UDP_Announce_Response::ParseNetwork(buffer, read.value()));
+        OUTCOME_CO_TRY(auto response, Message_UDP_Announce_Response::ParseNetwork(buffer, read.value()));
         assert(response.action_ == 1);
         assert(response.transaction_id_ == msg.transaction_id_);
 
@@ -352,14 +352,14 @@ namespace be
 
         asio::ip::udp::resolver resolver(io_context);
         const std::string port = std::to_string(request.port_);
-        OUTCOME_CO_TRY(endpoints, co_await resolver.async_resolve(request.host_, port, coro));
+        OUTCOME_CO_TRY(auto endpoints, co_await resolver.async_resolve(request.host_, port, coro));
         // Guarantees to be valid.
         auto& single_endpoint = *endpoints;
 
-        OUTCOME_CO_TRY(connection_id, co_await AsyncConnect(
+        OUTCOME_CO_TRY(std::uint64_t connection_id, co_await AsyncConnect(
             io_context, socket, single_endpoint, random));
         assert(connection_id != 0);
-        OUTCOME_CO_TRY(response, co_await AsyncAnnounce(io_context
+        OUTCOME_CO_TRY(be::TrackerResponse response, co_await AsyncAnnounce(io_context
             , socket
             , single_endpoint
             , random
@@ -372,7 +372,7 @@ namespace be
         HTTP_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTP_GetRequest& request)
     {
-        OUTCOME_CO_TRY(body, co_await HTTP_GET(io_context
+        OUTCOME_CO_TRY(std::string body, co_await HTTP_GET(io_context
             , request.host_, request.get_uri_, request.port_));
         co_return ParseTrackerCompactResponseContent(body);
     }
@@ -381,7 +381,7 @@ namespace be
         HTTPS_TrackerAnnounce(asio::io_context& io_context
             , const Tracker::HTTPS_GetRequest& request)
     {
-        OUTCOME_CO_TRY(body, co_await HTTPS_GET_NoVerification(io_context
+        OUTCOME_CO_TRY(std::string body, co_await HTTPS_GET_NoVerification(io_context
             , request.host_, request.get_uri_, request.port_));
         co_return ParseTrackerCompactResponseContent(body);
     }

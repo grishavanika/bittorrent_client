@@ -224,7 +224,7 @@ co_asio_result<void> TryDownloadPiecesFromPeer(
                 }
             }
 
-            OUTCOME_CO_TRY(msg, co_await be::ReadAnyMessage(peer.socket_));
+            OUTCOME_CO_TRY(be::AnyMessage msg, co_await be::ReadAnyMessage(peer.socket_));
 
             std::visit(overload{
                   [ ](be::Message_KeepAlive&) { }

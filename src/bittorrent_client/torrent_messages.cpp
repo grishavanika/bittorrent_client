@@ -14,7 +14,7 @@ namespace be
         // We don't strip 1-byte PeerMessageId
         // to avoid vector reallocation.
         assert(data.size() >= 1);
-        OUTCOME_TRY(m, Message::FromBuffer(std::move(data)));
+        OUTCOME_TRY(Message m, Message::FromBuffer(std::move(data)));
         return outcome::success(AnyMessage(std::move(m)));
     }
 

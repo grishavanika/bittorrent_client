@@ -176,7 +176,7 @@ namespace be
     template<typename Message>
     co_asio_result<Message> ReadMessage(asio::ip::tcp::socket& peer)
     {
-        OUTCOME_CO_TRY(any_m, co_await ReadAnyMessage(peer));
+        OUTCOME_CO_TRY(AnyMessage any_m, co_await ReadAnyMessage(peer));
         if (Message* exact = std::get_if<Message>(&any_m))
         {
             co_return outcome::success(std::move(*exact));

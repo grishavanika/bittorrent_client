@@ -65,7 +65,7 @@ namespace be
         {
             return outcome::failure(ClientErrorc::TODO);
         }
-        OUTCOME_TRY(torrent, ParseTorrentFileContent(AsStringView(buffer)));
+        OUTCOME_TRY(TorrentFileInfo torrent, ParseTorrentFileContent(AsStringView(buffer)));
 
         TorrentClient client;
         client.metainfo_ = std::move(torrent.metainfo_);
@@ -122,7 +122,7 @@ namespace be
         };
         if (metainfo_.multi_trackers_.empty())
         {
-            OUTCOME_TRY(main, build_from_one(metainfo_.tracker_url_utf8_));
+            OUTCOME_TRY(Tracker::Request main, build_from_one(metainfo_.tracker_url_utf8_));
             return outcome::success(Tracker::AllTrackers(std::size_t(1), std::move(main)));
         }
 
@@ -244,17 +244,17 @@ namespace be
         {
             if (auto* http_get = std::get_if<Tracker::HTTP_GetRequest>(&data))
             {
-                OUTCOME_CO_TRY(response, co_await HTTP_TrackerAnnounce(io_context, *http_get));
+                OUTCOME_CO_TRY(TrackerResponse response, co_await HTTP_TrackerAnnounce(io_context, *http_get));
                 co_return TryGetOnlyPeers(std::move(response));
             }
             else if (auto* https_get = std::get_if<Tracker::HTTPS_GetRequest>(&data))
             {
-                OUTCOME_CO_TRY(response, co_await HTTPS_TrackerAnnounce(io_context, *https_get));
+                OUTCOME_CO_TRY(TrackerResponse response, co_await HTTPS_TrackerAnnounce(io_context, *https_get));
                 co_return TryGetOnlyPeers(std::move(response));
             }
             else if (auto* udp = std::get_if<Tracker::UDP_Request>(&data))
             {
-                OUTCOME_CO_TRY(response, co_await UDP_TrackerAnnounce(io_context, *random_, *udp));
+                OUTCOME_CO_TRY(TrackerResponse response, co_await UDP_TrackerAnnounce(io_context, *random_, *udp));
                 co_return TryGetOnlyPeers(std::move(response));
             }
             co_return outcome::failure(ClientErrorc::TODO);
@@ -271,7 +271,7 @@ namespace be
                 , std::make_move_iterator(new_peers.value().begin())
                 , std::make_move_iterator(new_peers.value().end()));
         };
-        OUTCOME_CO_TRY(all_infos, build_tracker_requests(info));
+        OUTCOME_CO_TRY(Tracker::AllTrackers all_infos, build_tracker_requests(info));
         for (Tracker::Request& data : all_infos)
         {
             try_add_peers(co_await fetch_one(data));
@@ -329,7 +329,7 @@ namespace be
         OUTCOME_CO_TRY(co_await asio::async_write(socket_, asio::buffer(handshake.data_), coro));
         Message_Handshake::Buffer response;
         OUTCOME_CO_TRY(co_await asio::async_read(socket_, asio::buffer(response.data_), coro));
-        OUTCOME_CO_TRY(parsed, Message_Handshake::ParseNetwork(response));
+        OUTCOME_CO_TRY(Message_Handshake parsed, Message_Handshake::ParseNetwork(response));
         if (!IsValidHandshakeResponse(parsed, info_hash))
         {
             co_return outcome::failure(ClientErrorc::TODO);

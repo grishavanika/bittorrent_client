@@ -55,21 +55,21 @@ namespace be
 
     static outcome::result<void> ParseResponse_Interval(TrackerResponse& response, ElementRef& interval)
     {
-        OUTCOME_TRY(n, be::ElementRefAs<IntegerRef>(interval));
-        OUTCOME_TRY(v, ParseAsUint64(*n));
-        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
+        OUTCOME_TRY(IntegerRef* n, be::ElementRefAs<IntegerRef>(interval));
+        OUTCOME_TRY(std::uint64_t v, ParseAsUint64(*n));
+        OUTCOME_TRY(auto* state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
         state->rerequest_dt_secs_ = v;
         return outcome::success();
     }
 
     static outcome::result<void> ParseResponse_Peers(TrackerResponse& response, ElementRef& interval)
     {
-        OUTCOME_TRY(peers_blob, be::ElementRefAs<StringRef>(interval));
+        OUTCOME_TRY(StringRef* peers_blob, be::ElementRefAs<StringRef>(interval));
         if (peers_blob->empty() || ((peers_blob->size() % k_packed_peer_size) != 0))
         {
             return outcome::failure(ParseErrorc::InvalidPeersBlobLength);
         }
-        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
+        OUTCOME_TRY(auto* state, GetOrCreateOnly<TrackerResponse::OnSuccess>(response));
         state->peers_.reserve(peers_blob->size() / k_packed_peer_size);
         const char* current = AsConstData(*peers_blob);
         const char* const end = current + peers_blob->size();
@@ -86,8 +86,8 @@ namespace be
 
     static outcome::result<void> ParseResponse_Failure(TrackerResponse& response, ElementRef& failure)
     {
-        OUTCOME_TRY(str, be::ElementRefAs<StringRef>(failure));
-        OUTCOME_TRY(state, GetOrCreateOnly<TrackerResponse::OnError>(response));
+        OUTCOME_TRY(StringRef* str, be::ElementRefAs<StringRef>(failure));
+        OUTCOME_TRY(auto* state, GetOrCreateOnly<TrackerResponse::OnError>(response));
         if (!str->empty())
         {
             state->error_.assign(AsConstData(*str), str->size());
@@ -98,7 +98,7 @@ namespace be
     outcome::result<TrackerResponse>
         ParseTrackerCompactResponseContent(std::string_view content)
     {
-        OUTCOME_TRY(data, ParseDictionary(content));
+        OUTCOME_TRY(DictionaryRef data, ParseDictionary(content));
 
         KeyParser k_parsers[] =
         {

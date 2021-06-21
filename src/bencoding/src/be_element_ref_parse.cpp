@@ -162,12 +162,12 @@ namespace be
             DictionaryRefBuilder builder;
             while (has_data() && (*current_ != k_element_end))
             {
-                OUTCOME_TRY(key, parse_element(ElementId::Dictionary));
+                OUTCOME_TRY(ElementRef key, parse_element(ElementId::Dictionary));
                 if (!key.as_string())
                 {
                     return make_error(ElementId::Dictionary, ParseErrorc::NonStringAsDictionaryKey);
                 }
-                OUTCOME_TRY(value, parse_element(ElementId::Dictionary));
+                OUTCOME_TRY(ElementRef value, parse_element(ElementId::Dictionary));
                 builder.add(std::move(*key.as_string()), std::move(value));
             }
             if (!consume(k_element_end))
@@ -181,7 +181,7 @@ namespace be
         {
             const RememberPosition position(*this);
 
-            OUTCOME_TRY(length_element, parse_string_length());
+            OUTCOME_TRY(ElementRef length_element, parse_string_length());
             assert(length_element.as_integer());
 
             std::uint64_t length = 0;
@@ -286,7 +286,7 @@ namespace be
         ListRef elements;
         do
         {
-            OUTCOME_TRY(element, decoder.parse_element());
+            OUTCOME_TRY(ElementRef element, decoder.parse_element());
             elements.push_back(std::move(element));
         }
         while (decoder.has_data());
@@ -297,7 +297,7 @@ namespace be
     Parsed<StringRef> ParseString(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        OUTCOME_TRY(element, decoder.parse_string());
+        OUTCOME_TRY(ElementRef element, decoder.parse_string());
         assert(element.as_string());
         return std::move(*element.as_string());
     }
@@ -305,7 +305,7 @@ namespace be
     Parsed<IntegerRef> ParseInteger(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        OUTCOME_TRY(element, decoder.parse_integer());
+        OUTCOME_TRY(ElementRef element, decoder.parse_integer());
         assert(element.as_integer());
         return std::move(*element.as_integer());
     }
@@ -313,7 +313,7 @@ namespace be
     Parsed<ListRef> ParseList(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        OUTCOME_TRY(element, decoder.parse_list());
+        OUTCOME_TRY(ElementRef element, decoder.parse_list());
         assert(element.as_list());
         return std::move(*element.as_list());
     }
@@ -321,7 +321,7 @@ namespace be
     Parsed<DictionaryRef> ParseDictionary(std::string_view bencoded)
     {
         Parser decoder(bencoded.data(), bencoded.size());
-        OUTCOME_TRY(element, decoder.parse_dictionary());
+        OUTCOME_TRY(ElementRef element, decoder.parse_dictionary());
         assert(element.as_dictionary());
         return std::move(*element.as_dictionary());
     }

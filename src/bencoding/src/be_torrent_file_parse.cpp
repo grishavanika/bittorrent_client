@@ -41,7 +41,7 @@ namespace be
 
     static outcome::result<void> ParseAnnounce(TorrentMetainfo& metainfo, ElementRef& announce)
     {
-        OUTCOME_TRY(str, be::ElementRefAs<StringRef>(announce));
+        OUTCOME_TRY(StringRef* str, be::ElementRefAs<StringRef>(announce));
         if (!str->empty())
         {
             metainfo.tracker_url_utf8_.assign(
@@ -53,7 +53,7 @@ namespace be
 
     static outcome::result<void> ParseAnnounceList(TorrentMetainfo& metainfo, ElementRef& announce_list)
     {
-        OUTCOME_TRY(list, be::ElementRefAs<ListRef>(announce_list));
+        OUTCOME_TRY(ListRef* list, be::ElementRefAs<ListRef>(announce_list));
         if (list->empty())
         {
             return outcome::success();
@@ -85,7 +85,7 @@ namespace be
 
     static outcome::result<void> ParseInfo_Name(TorrentMetainfo& metainfo, ElementRef& name)
     {
-        OUTCOME_TRY(str, be::ElementRefAs<StringRef>(name));
+        OUTCOME_TRY(StringRef* str, be::ElementRefAs<StringRef>(name));
         // May be empty. It's just "suggested".
         if (!str->empty())
         {
@@ -97,15 +97,15 @@ namespace be
 
     static outcome::result<void> ParseInfo_PieceLength(TorrentMetainfo& metainfo, ElementRef& piece_length)
     {
-        OUTCOME_TRY(n, be::ElementRefAs<be::IntegerRef>(piece_length));
-        OUTCOME_TRY(length_bytes, ParseAsUint64(*n));
+        OUTCOME_TRY(IntegerRef* n, be::ElementRefAs<be::IntegerRef>(piece_length));
+        OUTCOME_TRY(std::uint64_t length_bytes, ParseAsUint64(*n));
         metainfo.info_.piece_length_bytes_ = length_bytes;
         return outcome::success();
     }
 
     static outcome::result<void> ParseInfo_Pieces(TorrentMetainfo& metainfo, ElementRef& pieces)
     {
-        OUTCOME_TRY(hashes, be::ElementRefAs<be::StringRef>(pieces));
+        OUTCOME_TRY(be::StringRef* hashes, be::ElementRefAs<be::StringRef>(pieces));
         const std::size_t size = hashes->size();
         if ((size == 0) || ((size % k_SHA1_length) != 0))
         {
@@ -127,8 +127,8 @@ namespace be
             return outcome::failure(ParseErrorc::AmbiguousMultiOrSingleTorrent);
         }
 
-        OUTCOME_TRY(n, be::ElementRefAs<IntegerRef>(length));
-        OUTCOME_TRY(length_bytes, ParseAsUint64(*n));
+        OUTCOME_TRY(IntegerRef* n, be::ElementRefAs<IntegerRef>(length));
+        OUTCOME_TRY(std::uint64_t length_bytes, ParseAsUint64(*n));
         metainfo.info_.length_or_files_.emplace<1>(length_bytes);
         return outcome::success();
     }
@@ -161,15 +161,15 @@ namespace be
 
     static outcome::result<TorrentMetainfo::File> ParseInfo_FilesFile(ElementRef& length, ElementRef& path)
     {
-        OUTCOME_TRY(n, be::ElementRefAs<be::IntegerRef>(length));
-        OUTCOME_TRY(path_parts, be::ElementRefAs<be::ListRef>(path));
-        OUTCOME_TRY(length_bytes, ParseAsUint64(*n));
+        OUTCOME_TRY(be::IntegerRef* n, be::ElementRefAs<be::IntegerRef>(length));
+        OUTCOME_TRY(be::ListRef* path_parts, be::ElementRefAs<be::ListRef>(path));
+        OUTCOME_TRY(std::uint64_t length_bytes, ParseAsUint64(*n));
 
         // Validate that path is actually array of non-empty strings.
         std::size_t total_length = 0;
         for (const ElementRef& part : *path_parts)
         {
-            OUTCOME_TRY(name, be::ElementRefAs<StringRef>(part));
+            OUTCOME_TRY(const StringRef* name, be::ElementRefAs<StringRef>(part));
             if (name->empty())
             {
                 return outcome::failure(ParseErrorc::EmptyMultiFileName);
@@ -191,12 +191,12 @@ namespace be
             // Only 'length' or 'files' can exist, not both.
             return outcome::failure(ParseErrorc::AmbiguousMultiOrSingleTorrent);
         }
-        OUTCOME_TRY(list, be::ElementRefAs<ListRef>(files_));
+        OUTCOME_TRY(ListRef* list, be::ElementRefAs<ListRef>(files_));
 
         auto parse_file = [](ElementRef& e)
             -> outcome::result<TorrentMetainfo::File>
         {
-            OUTCOME_TRY(data, be::ElementRefAs<DictionaryRef>(e));
+            OUTCOME_TRY(DictionaryRef* data, be::ElementRefAs<DictionaryRef>(e));
             ElementRef* length = nullptr;
             ElementRef* path = nullptr;
             for (auto& [name, element] : *data)
@@ -220,7 +220,7 @@ namespace be
         std::vector<TorrentMetainfo::File> files;
         for (ElementRef& e : *list)
         {
-            OUTCOME_TRY(file, parse_file(e));
+            OUTCOME_TRY(auto file, parse_file(e));
             files.push_back(std::move(file));
         }
 
@@ -236,7 +236,7 @@ namespace be
 
     static outcome::result<void> ParseInfo(TorrentMetainfo& metainfo, ElementRef& info)
     {
-        OUTCOME_TRY(data, be::ElementRefAs<DictionaryRef>(info));
+        OUTCOME_TRY(DictionaryRef* data, be::ElementRefAs<DictionaryRef>(info));
 
         KeyParser k_parsers[] =
         {
@@ -267,7 +267,7 @@ namespace be
 
     outcome::result<TorrentFileInfo> ParseTorrentFileContent(std::string_view content)
     {
-        OUTCOME_TRY(data, ParseDictionary(content));
+        OUTCOME_TRY(DictionaryRef data, ParseDictionary(content));
 
         ElementPosition info_position;
         ElementPosition announce_position;

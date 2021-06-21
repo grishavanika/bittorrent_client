@@ -1,5 +1,7 @@
+test_torrents/*
 .vs/*
 build*/*
 Testing/*
 third_party/deps/*
+*.stackdump
 

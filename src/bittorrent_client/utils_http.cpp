@@ -103,7 +103,7 @@ namespace detail
 
         auto coro = as_result(asio::use_awaitable);
 
-        OUTCOME_CO_TRY(endpoints, co_await resolver.async_resolve(host, port, coro));
+        OUTCOME_CO_TRY(auto endpoints, co_await resolver.async_resolve(host, port, coro));
         OUTCOME_CO_TRY(co_await context.connect(endpoints));
         OUTCOME_CO_TRY(co_await asio::async_write(socket, request, coro));
         OUTCOME_CO_TRY(co_await asio::async_read_until(socket, response, "\r\n", coro));
@@ -172,7 +172,7 @@ co_asio_result<std::string>
         , std::string host, std::string get_uri
         , std::uint16_t port_n /*= 80*/)
 {
-    OUTCOME_CO_TRY(data, co_await ::detail::HTTP_GET<detail::HTTPContext>(
+    OUTCOME_CO_TRY(std::string data, co_await ::detail::HTTP_GET<detail::HTTPContext>(
         io_context, std::move(host), std::move(get_uri), port_n));
     co_return outcome::success(std::move(data));
 }
@@ -182,7 +182,7 @@ co_asio_result<std::string>
         , std::string host, std::string get_uri
         , std::uint16_t port_n /*= 443*/)
 {
-    OUTCOME_CO_TRY(data, co_await ::detail::HTTP_GET<detail::HTTPSContext>(
+    OUTCOME_CO_TRY(std::string data, co_await ::detail::HTTP_GET<detail::HTTPSContext>(
         io_context, std::move(host), std::move(get_uri), port_n));
     co_return outcome::success(std::move(data));
 }
