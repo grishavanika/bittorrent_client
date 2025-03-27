@@ -85,37 +85,9 @@ namespace detail {
     };
 
     template<typename Handler>
-    inline void*
-        asio_handler_allocate(std::size_t size, outcome_result_handler<Handler>* this_handler)
-    {
-        return asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
-    }
-
-    template<typename Handler>
-    inline void asio_handler_deallocate(
-        void* pointer, std::size_t size, outcome_result_handler<Handler>* this_handler)
-    {
-        asio_handler_alloc_helpers::deallocate(pointer, size, this_handler->handler_);
-    }
-
-    template<typename Handler>
     inline bool asio_handler_is_continuation(outcome_result_handler<Handler>* this_handler)
     {
         return asio_handler_cont_helpers::is_continuation(this_handler->handler_);
-    }
-
-    template<typename Function, typename Handler>
-    inline void
-        asio_handler_invoke(Function& function, outcome_result_handler<Handler>* this_handler)
-    {
-        asio_handler_invoke_helpers::invoke(function, this_handler->handler_);
-    }
-
-    template<typename Function, typename Handler>
-    inline void asio_handler_invoke(
-        const Function& function, outcome_result_handler<Handler>* this_handler)
-    {
-        asio_handler_invoke_helpers::invoke(function, this_handler->handler_);
     }
 
     template<typename Signature>

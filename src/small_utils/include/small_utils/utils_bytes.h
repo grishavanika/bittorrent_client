@@ -35,7 +35,7 @@ struct BytesWriter
     BytesWriter& write_data(const void* ptr, std::size_t size)
     {
         const std::size_t has = (end_ - current_);
-        assert(has >= size);
+        assert(has >= size); (void)has;
         std::memcpy(current_, ptr, size);
         current_ += size;
         return *this;
