@@ -189,7 +189,7 @@ namespace be
     {
         const auto buffer = m.serialize();
         OUTCOME_CO_TRY(co_await asio::async_write(peer
-            , asio::buffer(buffer.data_), as_result(asio::use_awaitable)));
+            , asio::buffer(buffer.data_), as_result(asio::use_awaitable)))
         co_return outcome::success();
     }
 

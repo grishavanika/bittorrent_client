@@ -249,7 +249,7 @@ namespace be
 
         for (auto& [name, element] : *data)
         {
-            OUTCOME_TRY(InvokeParserOptionalKey(metainfo, k_parsers, name, element));
+            OUTCOME_TRY(InvokeParserOptionalKey(metainfo, k_parsers, name, element))
         }
 
         if ((metainfo.tracker_url_utf8_.size() > 0)
@@ -281,7 +281,7 @@ namespace be
         TorrentMetainfo metainfo;
         for (auto& [name, element] : data)
         {
-            OUTCOME_TRY(InvokeParserOptionalKey(metainfo, k_parsers, name, element));
+            OUTCOME_TRY(InvokeParserOptionalKey(metainfo, k_parsers, name, element))
         }
 
         if ((announce_position.end_ == 0)

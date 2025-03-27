@@ -187,7 +187,7 @@ namespace cxxurl_detail
                 (std::uint64_t(piece_size) * std::uint64_t((pieces_count - 1)));
             assert(size_except_last_piece < total_size);
             const std::uint64_t last = (total_size - size_except_last_piece);
-            assert(last <= std::uint64_t(piece_size));
+            assert(last <= std::uint64_t(piece_size)); (void)last;
         }
         return client;
     }

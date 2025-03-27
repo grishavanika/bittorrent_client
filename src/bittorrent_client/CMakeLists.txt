@@ -8,5 +8,5 @@ set_all_warnings(${exe_name} PRIVATE)
 
 target_link_libraries(${exe_name} PRIVATE bencoding)
 target_link_libraries(${exe_name} PRIVATE small_utils)
-target_link_libraries(${exe_name} PRIVATE CxxUrl)
+target_link_libraries(${exe_name} PRIVATE CxxUrl_Integrated)
 target_link_libraries(${exe_name} PRIVATE asio_Integrated)

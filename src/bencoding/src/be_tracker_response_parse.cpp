@@ -110,7 +110,7 @@ namespace be
         TrackerResponse response;
         for (auto& [name, element] : data)
         {
-            OUTCOME_TRY(InvokeParserOptionalKey(response, k_parsers, name, element));
+            OUTCOME_TRY(InvokeParserOptionalKey(response, k_parsers, name, element))
         }
 
         if (response.data_.index() == 0)

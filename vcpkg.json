@@ -1,12 +1,13 @@
 {
   "dependencies": [
-    "gtest",
-    "openssl",
     {
       "name": "asio",
       "features": [
         "openssl"
       ]
-    }
+    },
+    "gtest",
+    "openssl",
+    "outcome"
   ]
 }

@@ -1,5 +1,6 @@
 #pragma once
-#include <outcome.hpp>
+#include <outcome/outcome.hpp>
+#include <outcome/try.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
 
 

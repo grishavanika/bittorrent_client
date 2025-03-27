@@ -24,3 +24,6 @@ endif()
 
 add_subdirectory(third_party)
 add_subdirectory(src)
+
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "bittorrent_client")
+
