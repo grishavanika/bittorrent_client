@@ -9,6 +9,5 @@ set_all_warnings(${lib_name} PUBLIC)
 target_include_directories(${lib_name} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(${lib_name} PUBLIC include)
 
-target_link_libraries(${lib_name} PUBLIC scope_guard)
 target_link_libraries(${lib_name} PUBLIC TinySHA1)
 

@@ -1,18 +1,12 @@
-[submodule "third_party/deps/gtest-src"]
-	path = third_party/deps/gtest-src
-	url = https://github.com/google/googletest.git
 [submodule "third_party/deps/TinySHA1-src"]
 	path = third_party/deps/TinySHA1-src
 	url = https://github.com/mohaps/TinySHA1
-[submodule "third_party/deps/scope_guard-src"]
-	path = third_party/deps/scope_guard-src
-	url = https://github.com/grishavanika/folly_scope_guard.git
-[submodule "third_party/deps/CxxUrl-src"]
-	path = third_party/deps/CxxUrl-src
-	url = https://github.com/grishavanika/CxxUrl
 [submodule "third_party/deps/asio-src"]
 	path = third_party/deps/asio-src
 	url = https://github.com/chriskohlhoff/asio.git
 [submodule "third_party/deps/outcome-src"]
 	path = third_party/deps/outcome-src
 	url = https://github.com/ned14/outcome.git
+[submodule "third_party/deps/CxxUrl-src"]
+	path = third_party/deps/CxxUrl-src
+	url = https://github.com/chmike/CxxUrl.git

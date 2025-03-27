@@ -26,7 +26,7 @@ FileBuffer ReadAllFileAsBinary(const char* filepath)
     {
         return {};
     }
-    SCOPE_EXIT{ (void)fclose(f); };
+    struct Scope { FILE* _f; ~Scope() { (void)fclose(_f); } } _{f};
     int status = fseek(f, 0, SEEK_END);
     if (status != 0)
     {

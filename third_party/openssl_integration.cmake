@@ -1,19 +1,10 @@
 include(CMakePrintHelpers)
 
-# TODO: remove hard-coded path.
-# Downloaded from:
-# https://slproweb.com/products/Win32OpenSSL.html
+add_library(OpenSSL_Integrated INTERFACE)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(OpenSSL_Integrated INTERFACE OpenSSL::SSL)
+target_link_libraries(OpenSSL_Integrated INTERFACE OpenSSL::Crypto)
 
-if (MSVC)
-    # Hard-coded for now, VCPKG fails to build.
-    # Don't want to spend time on building this.
-    add_library(OpenSSL INTERFACE)
-    set(OpenSSLPath "C:/libs/OpenSSL-Win64")
-    target_include_directories(OpenSSL INTERFACE
-        "${OpenSSLPath}/include")
-    target_link_libraries(OpenSSL INTERFACE
-        "${OpenSSLPath}/lib/libssl.lib"
-        "${OpenSSLPath}/lib/libcrypto.lib")
-
-	cmake_print_variables(OpenSSLPath)
-endif ()
+target_compile_options(OpenSSL_Integrated INTERFACE
+	/wd4996
+	)

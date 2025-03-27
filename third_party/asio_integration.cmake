@@ -40,7 +40,7 @@ if (MSVC)
         /wd4459
         )
 
-    target_link_libraries(asio INTERFACE OpenSSL)
+    target_link_libraries(asio INTERFACE OpenSSL_Integrated)
 endif ()
 
 if (clang_on_msvc)

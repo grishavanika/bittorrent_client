@@ -18,6 +18,107 @@
 
 namespace be
 {
+namespace cxxurl_detail
+{ // from url.cpp
+    static const uint8_t tbl[256] = {
+        0,0,0,0, 0,0,0,0,     // NUL SOH STX ETX  EOT ENQ ACK BEL
+        0,0,0,0, 0,0,0,0,     // BS  HT  LF  VT   FF  CR  SO  SI
+        0,0,0,0, 0,0,0,0,     // DLE DC1 DC2 DC3  DC4 NAK SYN ETB
+        0,0,0,0, 0,0,0,0,     // CAN EM  SUB ESC  FS  GS  RS  US
+        0x00,0x01,0x00,0x00, 0x01,0x20,0x01,0x01, // SP ! " #  $ % & '
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x08, //  ( ) * +  , - . /
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  0 1 2 3  4 5 6 7
+        0x01,0x01,0x04,0x01, 0x00,0x01,0x00,0x10, //  8 9 : ;  < = > ?
+        0x02,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  @ A B C  D E F G
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  H I J K  L M N O
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  P Q R S  T U V W
+        0x01,0x01,0x01,0x00, 0x00,0x00,0x00,0x01, //  X Y Z [  \ ] ^ _
+        0x00,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  ` a b c  d e f g
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  h i j k  l m n o
+        0x01,0x01,0x01,0x01, 0x01,0x01,0x01,0x01, //  p q r s  t u v w
+        0x01,0x01,0x01,0x00, 0x00,0x00,0x01,0x00, //  x y z {  | } ~ DEL
+        0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0
+    };
+
+    inline bool is_char(char c, std::uint8_t mask) {
+        return (tbl[static_cast<unsigned char>(c)] & mask) != 0;
+    }
+
+    class encode_query_key {
+    public:
+        encode_query_key(const std::string& s, std::uint8_t mask) : m_s(s), m_mask(mask) {}
+    private:
+        const std::string& m_s;
+        std::uint8_t m_mask;
+        friend std::ostream& operator<< (std::ostream& o, const encode_query_key& e) {
+            for (const char c : e.m_s)
+                if (c == ' ')
+                    o << '+';
+                else if (c == '+')
+                    o << "%2B";
+                else if (c == '=')
+                    o << "%3D";
+                else if (c == '&')
+                    o << "%26";
+                else if (c == ';')
+                    o << "%3B";
+                else if (is_char(c, e.m_mask))
+                    o << c;
+                else
+                    o << '%' << "0123456789ABCDEF"[((uint8_t)c) >> 4] << "0123456789ABCDEF"[((uint8_t)c) & 0xF];
+            return o;
+        }
+    };
+
+
+    class encode_query_val {
+    public:
+        encode_query_val(const std::string& s, std::uint8_t mask) : m_s(s), m_mask(mask) {}
+    private:
+        const std::string& m_s;
+        std::uint8_t m_mask;
+        friend std::ostream& operator<< (std::ostream& o, const encode_query_val& e) {
+            for (const char c : e.m_s)
+                if (c == ' ')
+                    o << '+';
+                else if (c == '+')
+                    o << "%2B";
+                else if (c == '&')
+                    o << "%26";
+                else if (c == ';')
+                    o << "%3B";
+                else if (is_char(c, e.m_mask))
+                    o << c;
+                else
+                    o << '%' << "0123456789ABCDEF"[((uint8_t)c) >> 4] << "0123456789ABCDEF"[((uint8_t)c) & 0xF];
+            return o;
+        }
+    };
+
+    std::string build_query_str(const Url& url)
+    {
+        std::stringstream str;
+        str << "?";
+        auto it = url.query().begin(), end = url.query().end();
+        if (it->key().empty())
+            throw Url::build_error("First query entry has no key");
+        str << encode_query_key(it->key(), 0x1F);
+        if (!it->val().empty())
+            str << "=" << encode_query_val(it->val(), 0x1F);
+        while (++it != end) {
+            if (it->key().empty())
+                throw Url::build_error("A query entry has no key");
+            str << "&" << encode_query_key(it->key(), 0x1F);
+            if (!it->val().empty())
+                str << "=" << encode_query_val(it->val(), 0x1F);
+        }
+        return std::move(str).str();
+    }
+} // cxxurl_detail
+
     static std::string AsString(const SHA1Bytes& sha1)
     {
         const void* data = sha1.data_;
@@ -181,7 +282,7 @@ namespace be
         {
             body.get_uri_ += '/';
         }
-        body.get_uri_ += url.query_str();
+        body.get_uri_ += cxxurl_detail::build_query_str(url);
         return outcome::success(Tracker::Request(std::move(body)));
     }
 

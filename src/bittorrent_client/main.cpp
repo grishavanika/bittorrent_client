@@ -202,6 +202,13 @@ void PiecesToDownload::on_piece_downloaded(Handle piece)
     pieces_.erase(piece);
 }
 
+struct ScopeExit
+{
+    std::function<void ()> f_;
+    ~ScopeExit() { if (f_) f_(); }
+    void dismiss() { f_ = {}; }
+};
+
 co_asio_result<void> TryDownloadPiecesFromPeer(
     be::TorrentPeer& peer, PiecesToDownload& pieces)
 {
@@ -217,7 +224,7 @@ co_asio_result<void> TryDownloadPiecesFromPeer(
         }
         // Put back to the queue on early out or
         // coroutine exit.
-        auto retry = folly::makeGuard([piece, &pieces]
+        ScopeExit retry([piece, &pieces]
         {
             pieces.push_piece_to_retry(piece);
         });

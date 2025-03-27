@@ -1,5 +1,3 @@
-#include <ScopeGuard.h>
-
 #include <string_view>
 
 #include <cstdio>

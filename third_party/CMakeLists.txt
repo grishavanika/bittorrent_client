@@ -1,7 +1,6 @@
 include(gtest_integration.cmake)
 include(TinySHA1_integration.cmake)
 include(CxxUrl_integration.cmake)
-include(scope_guard_integration.cmake)
 include(openssl_integration.cmake)
 include(asio_integration.cmake)
 include(outcome_integration.cmake)
