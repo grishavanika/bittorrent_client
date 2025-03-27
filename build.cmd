@@ -5,5 +5,5 @@ call cmake -S . -B build ^
 :: 	-T ClangCL ^
 :: 	-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
 
-:: call cmake --build build --config Release
+call cmake --build build --config Release
 :: call cmake --build build_clang --config Release
